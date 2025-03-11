@@ -20,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../context/AuthContext';
-import { postsAPI } from '../../services/api';
+import { postsAPI, guidesAPI } from '../../services/api';
 
 const { width, height } = Dimensions.get('window');
 const BOTTOM_SHEET_MAX_HEIGHT = height * 0.6;
@@ -215,16 +215,20 @@ const darkMapStyle = [
   }
 ];
 
-export default function MapScreen({ navigation }) {
+export default function MapScreen({ navigation, route }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState([]);
+  const [guides, setGuides] = useState([]);
   const [filteredPosts, setFilteredPosts] = useState([]);
+  const [filteredGuides, setFilteredGuides] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [locationPosts, setLocationPosts] = useState([]);
+  const [locationGuides, setLocationGuides] = useState([]);
+  const [selectedItemType, setSelectedItemType] = useState(null); // 'post' or 'guide'
   const mapRef = useRef(null);
   const [region, setRegion] = useState({
     latitude: 20,
@@ -289,8 +293,67 @@ export default function MapScreen({ navigation }) {
   ).current;
 
   useEffect(() => {
-    fetchPosts();
+    Promise.all([fetchPosts(), fetchGuides()])
+      .then(() => setLoading(false))
+      .catch((error) => {
+        console.error('Error loading data:', error);
+        setLoading(false);
+      });
   }, []);
+
+  // Handle navigation params if coming from a post or guide
+  useEffect(() => {
+    if (route.params?.selectedLocation) {
+      const { selectedLocation, initialPost, initialGuide } = route.params;
+      
+      // Set the selected location
+      setSelectedLocation(selectedLocation);
+      
+      // If we have coordinates, move the map to that location
+      if (selectedLocation.coordinates?.latitude && selectedLocation.coordinates?.longitude) {
+        const newRegion = {
+          latitude: selectedLocation.coordinates.latitude,
+          longitude: selectedLocation.coordinates.longitude,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        };
+        
+        // Update region state
+        setRegion(newRegion);
+        
+        // Animate map to the location
+        setTimeout(() => {
+          mapRef.current?.animateToRegion(newRegion, 1000);
+        }, 500);
+      }
+      
+      // If we have an initial post, show it in the bottom sheet
+      if (initialPost) {
+        setLocationPosts([initialPost]);
+        snapToPosition(1);
+        setBottomSheetExpanded(true);
+      } 
+      // If we have an initial guide, show related posts
+      else if (initialGuide) {
+        // Find posts with the same location name
+        fetchGuides().then(() => {
+          const postsWithSameLocation = posts.filter(post => 
+            post.location?.name?.toLowerCase() === selectedLocation.name.toLowerCase()
+          );
+          
+          if (postsWithSameLocation.length > 0) {
+            setLocationPosts(postsWithSameLocation);
+          } else {
+            // If no posts found, show a message
+            setLocationPosts([]);
+          }
+          
+          snapToPosition(1);
+          setBottomSheetExpanded(true);
+        });
+      }
+    }
+  }, [route.params, posts]);
 
   // Set initial posts for bottom sheet when posts are loaded
   useEffect(() => {
@@ -310,7 +373,6 @@ export default function MapScreen({ navigation }) {
 
   const fetchPosts = async () => {
     try {
-      setLoading(true);
       const response = await postsAPI.getAllPosts();
       // Filter posts that have valid location data
       const postsWithLocation = response.filter(post =>
@@ -319,6 +381,7 @@ export default function MapScreen({ navigation }) {
       );
       setPosts(postsWithLocation);
       setFilteredPosts(postsWithLocation);
+      return postsWithLocation; // Return posts for use in navigation params handler
     } catch (error) {
       console.error('Error fetching posts for map:', error);
       Alert.alert(
@@ -326,8 +389,27 @@ export default function MapScreen({ navigation }) {
         'Failed to load posts. Please try again.',
         [{ text: 'OK' }]
       );
-    } finally {
-      setLoading(false);
+      return [];
+    }
+  };
+
+  const fetchGuides = async () => {
+    try {
+      const response = await guidesAPI.getAllGuides();
+      // Filter guides that have valid location data
+      const guidesWithLocation = response.filter(guide =>
+        guide.location && guide.coordinates?.latitude && guide.coordinates?.longitude
+      );
+      setGuides(guidesWithLocation);
+      setFilteredGuides(guidesWithLocation);
+      return guidesWithLocation;
+    } catch (error) {
+      console.error('Error fetching guides for map:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load guides. Please try again.'
+      );
+      return [];
     }
   };
 
@@ -339,17 +421,23 @@ export default function MapScreen({ navigation }) {
   const handleSearch = () => {
     if (searchQuery.trim() === '') {
       setFilteredPosts(posts);
+      setFilteredGuides(guides);
       return;
     }
     
     setIsSearching(true);
     try {
-      // Filter posts directly based on location name
+      // Filter posts and guides based on location name
       const searchResults = posts.filter(post => 
         post.location?.name?.toLowerCase().includes(searchQuery.toLowerCase())
       );
       
-      setFilteredPosts(searchResults.length > 0 ? searchResults : []);
+      const guideResults = guides.filter(guide => 
+        guide.location?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      
+      setFilteredPosts(searchResults);
+      setFilteredGuides(guideResults);
       
       // If we have results, move the map to the first result
       if (searchResults.length > 0) {
@@ -360,13 +448,20 @@ export default function MapScreen({ navigation }) {
           latitudeDelta: 0.1,
           longitudeDelta: 0.1,
         }, 1000);
+      } else if (guideResults.length > 0) {
+        const firstGuide = guideResults[0];
+        mapRef.current?.animateToRegion({
+          latitude: firstGuide.coordinates.latitude,
+          longitude: firstGuide.coordinates.longitude,
+          latitudeDelta: 0.1,
+          longitudeDelta: 0.1,
+        }, 1000);
       }
       
       // Close the search modal if we have results
-      if (searchResults.length > 0) {
+      if (searchResults.length > 0 || guideResults.length > 0) {
         setIsSearchVisible(false);
       } else {
-        // Show a message if no results found
         Alert.alert(
           'No Results',
           `No locations found matching "${searchQuery}"`,
@@ -417,14 +512,37 @@ export default function MapScreen({ navigation }) {
     setFilteredPosts(posts);
   };
 
-  const handleMarkerPress = (post) => {
-    // Find all posts with the same location name
-    const postsAtLocation = posts.filter(p => 
-      p.location?.name === post.location?.name
-    );
+  const handleMarkerPress = (item, type) => {
+    setSelectedItemType(type);
     
-    setSelectedLocation(post.location);
-    setLocationPosts(postsAtLocation);
+    if (type === 'post') {
+      // Find all posts and guides with the same location name
+      const postsAtLocation = posts.filter(p => 
+        p.location?.name === item.location?.name
+      );
+      const guidesAtLocation = guides.filter(g => 
+        g.location?.toLowerCase() === item.location?.name?.toLowerCase()
+      );
+      
+      setSelectedLocation(item.location);
+      setLocationPosts(postsAtLocation);
+      setLocationGuides(guidesAtLocation);
+    } else {
+      // For guides, find posts at the same location
+      const postsAtLocation = posts.filter(p => 
+        p.location?.name?.toLowerCase() === item.location?.toLowerCase()
+      );
+      const guidesAtLocation = guides.filter(g => 
+        g.location?.toLowerCase() === item.location?.toLowerCase()
+      );
+      
+      setSelectedLocation({
+        name: item.location,
+        coordinates: item.coordinates
+      });
+      setLocationPosts(postsAtLocation);
+      setLocationGuides(guidesAtLocation);
+    }
     
     // Expand the bottom sheet
     snapToPosition(1);
@@ -530,6 +648,41 @@ export default function MapScreen({ navigation }) {
     </TouchableOpacity>
   );
 
+  const renderGuideItem = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.guideItem}
+      onPress={() => navigation.navigate('UserProfile', { userId: item.userId })}
+    >
+      <View style={styles.guideContent}>
+        <View style={styles.guideHeader}>
+          <View style={styles.guideUserInfo}>
+            {item.user?.profileImage ? (
+              <Image 
+                source={{ uri: item.user.profileImage }} 
+                style={styles.guideUserAvatar}
+              />
+            ) : (
+              <View style={[styles.guideUserAvatar, styles.defaultAvatar]}>
+                <Text style={styles.avatarText}>
+                  {item.user?.username ? item.user.username.charAt(0).toUpperCase() : '?'}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.guideUsername}>{item.user?.username || 'Unknown'}</Text>
+          </View>
+          <View style={styles.guideStats}>
+            <Ionicons name="thumbs-up" size={16} color="#4a90e2" />
+            <Text style={styles.guideStatsText}>{item.likes || 0}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.guideDetails}>
+          <Text style={styles.guideLocationNote}>{item.locationNote || 'No additional notes'}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -559,9 +712,10 @@ export default function MapScreen({ navigation }) {
           onRegionChangeComplete={setRegion}
           customMapStyle={darkMapStyle}
         >
+          {/* Post Markers */}
           {filteredPosts.map((post) => (
             <Marker
-              key={post._id}
+              key={`post-${post._id}`}
               coordinate={{
                 latitude: post.location.coordinates.latitude,
                 longitude: post.location.coordinates.longitude
@@ -569,7 +723,22 @@ export default function MapScreen({ navigation }) {
               title={post.location.name}
               description={`Posted by ${post.userId.username || 'Unknown'}`}
               pinColor="#4a90e2"
-              onPress={() => handleMarkerPress(post)}
+              onPress={() => handleMarkerPress(post, 'post')}
+            />
+          ))}
+
+          {/* Guide Markers */}
+          {filteredGuides.map((guide) => (
+            <Marker
+              key={`guide-${guide._id}`}
+              coordinate={{
+                latitude: guide.coordinates.latitude,
+                longitude: guide.coordinates.longitude
+              }}
+              title={guide.location}
+              description={`Guide by ${guide.username || 'Unknown'}`}
+              pinColor="#FF6B6B"
+              onPress={() => handleMarkerPress(guide, 'guide')}
             />
           ))}
         </MapView>
@@ -627,29 +796,45 @@ export default function MapScreen({ navigation }) {
               </View>
             </View>
             
-            {selectedLocation ? (
-              <View style={styles.locationHeader}>
-                <Ionicons name="location" size={24} color="#4a90e2" />
-                <Text style={styles.locationName}>{selectedLocation.name}</Text>
-              </View>
-            ) : (
-              <View style={styles.locationHeader}>
-                <Ionicons name="compass" size={24} color="#4a90e2" />
-                <Text style={styles.locationName}>Explore Travel Posts</Text>
-              </View>
-            )}
+            <View style={styles.locationHeader}>
+              <Ionicons 
+                name={selectedItemType === 'guide' ? "compass" : "location"} 
+                size={24} 
+                color={selectedItemType === 'guide' ? "#FF6B6B" : "#4a90e2"} 
+              />
+              <Text style={styles.locationName}>
+                {selectedLocation ? selectedLocation.name : 'Explore Travel Posts'}
+              </Text>
+            </View>
             
-            <Text style={styles.postsTitle}>
-              {selectedLocation 
-                ? `${locationPosts.length} ${locationPosts.length === 1 ? 'Post' : 'Posts'} at this location`
-                : 'Popular travel destinations'
-              }
-            </Text>
+            {/* Guides Section */}
+            {locationGuides.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Travel Guides</Text>
+                  <Text style={styles.sectionCount}>{locationGuides.length}</Text>
+                </View>
+                <FlatList
+                  data={locationGuides}
+                  renderItem={renderGuideItem}
+                  keyExtractor={(item) => `guide-${item._id}`}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.guidesContainer}
+                />
+              </>
+            )}
+
+            {/* Posts Section */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Posts</Text>
+              <Text style={styles.sectionCount}>{locationPosts.length}</Text>
+            </View>
             
             <FlatList
               data={locationPosts}
               renderItem={renderLocationPost}
-              keyExtractor={(item) => item._id}
+              keyExtractor={(item) => `post-${item._id}`}
               contentContainerStyle={styles.locationPostsList}
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
@@ -850,12 +1035,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
     marginTop: 5,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 12,
+    borderRadius: 10,
   },
   locationName: {
     color: '#ffffff',
     fontSize: 20,
     fontWeight: 'bold',
     marginLeft: 10,
+    flex: 1,
   },
   postsTitle: {
     color: '#999',
@@ -1066,5 +1255,72 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 5,
     fontSize: 14,
-  }
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    marginTop: 15,
+  },
+  sectionTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  sectionCount: {
+    color: '#999',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  guidesContainer: {
+    paddingBottom: 15,
+  },
+  guideItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 15,
+    marginRight: 12,
+    width: 280,
+  },
+  guideContent: {
+    gap: 10,
+  },
+  guideHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  guideUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  guideUserAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  guideUsername: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  guideStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  guideStatsText: {
+    color: '#cccccc',
+    fontSize: 14,
+  },
+  guideDetails: {
+    marginTop: 5,
+  },
+  guideLocationNote: {
+    color: '#cccccc',
+    fontSize: 14,
+    lineHeight: 20,
+  },
 });

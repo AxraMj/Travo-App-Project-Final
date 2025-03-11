@@ -7,6 +7,7 @@ import {
   Image 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 const GuideCard = ({ 
   guide, 
@@ -15,6 +16,21 @@ const GuideCard = ({
   onDelete, 
   isOwner 
 }) => {
+  const navigation = useNavigation();
+
+  const handleLocationPress = () => {
+    if (guide.location) {
+      // Navigate to map with the location
+      navigation.navigate('Map', { 
+        selectedLocation: {
+          name: guide.location,
+          coordinates: guide.coordinates || null
+        },
+        initialGuide: guide
+      });
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -36,10 +52,13 @@ const GuideCard = ({
           </View>
 
           {guide.location && (
-            <View style={styles.locationContainer}>
+            <TouchableOpacity 
+              style={styles.locationContainer}
+              onPress={handleLocationPress}
+            >
               <Ionicons name="location" size={14} color="#1DA1F2" />
               <Text style={styles.location}>{guide.location}</Text>
-            </View>
+            </TouchableOpacity>
           )}
 
           {guide.locationNote && (
@@ -137,6 +156,7 @@ const styles = StyleSheet.create({
     color: '#1DA1F2',
     fontSize: 14,
     marginLeft: 4,
+    textDecorationLine: 'underline',
   },
   locationNote: {
     color: 'rgba(255,255,255,0.7)',

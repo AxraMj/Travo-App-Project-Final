@@ -62,6 +62,15 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
     }
   };
 
+  const handleLocationPress = () => {
+    if (localPost.location?.coordinates) {
+      navigation.navigate('Map', { 
+        selectedLocation: localPost.location,
+        initialPost: localPost
+      });
+    }
+  };
+
   // Handle like animation
   const animateScale = (scaleValue) => {
     Animated.sequence([
@@ -334,8 +343,11 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
             style={styles.profileImage}
           />
           <View>
-            <Text style={styles.username}>{localPost.userId.username}</Text>
-            <Text style={styles.location}>{localPost.location.name}</Text>
+            <Text style={styles.username}>@{localPost.userId.username}</Text>
+            <Text style={styles.dot}>•</Text>
+            <TouchableOpacity onPress={handleLocationPress}>
+              <Text style={styles.location}>{localPost.location.name}</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
 
@@ -390,10 +402,13 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
 
         {/* Location and Weather */}
         <View style={styles.locationWeather}>
-          <View style={styles.locationContainer}>
+          <TouchableOpacity 
+            style={styles.locationContainer}
+            onPress={handleLocationPress}
+          >
             <Ionicons name="location-sharp" size={14} color="#FF6B6B" />
             <Text style={styles.locationText}>{localPost.location.name}</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.weatherContainer}>
             <Ionicons name="partly-sunny" size={14} color="#FFD93D" />
             <Text style={styles.temperature}>{localPost.weather.temp}°C</Text>
@@ -565,9 +580,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   location: {
-    color: 'rgba(255,255,255,0.7)',
+    color: '#4a90e2',
     fontSize: 12,
-    marginTop: 2,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   moreButton: {
     padding: 8,
@@ -600,8 +616,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   locationText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
+    color: '#4a90e2',
+    fontSize: 14,
+    marginLeft: 4,
+    textDecorationLine: 'underline',
   },
   weatherContainer: {
     flexDirection: 'row',
@@ -800,5 +818,9 @@ const styles = StyleSheet.create({
   },
   followingButtonText: {
     color: '#1DA1F2',
+  },
+  dot: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
   },
 });
