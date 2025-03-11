@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,7 +10,10 @@ import {
   FlatList,
   Text,
   Keyboard,
-  Alert
+  Alert,
+  Image,
+  Animated,
+  PanResponder
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +23,9 @@ import { useAuth } from '../../context/AuthContext';
 import { postsAPI } from '../../services/api';
 
 const { width, height } = Dimensions.get('window');
+const BOTTOM_SHEET_MAX_HEIGHT = height * 0.6;
+const BOTTOM_SHEET_MIN_HEIGHT = 120;
+const BOTTOM_SHEET_INITIAL_HEIGHT = height * 0.25;
 
 // Dark map style to match app theme
 const darkMapStyle = [
@@ -217,6 +223,8 @@ export default function MapScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [locationPosts, setLocationPosts] = useState([]);
   const mapRef = useRef(null);
   const [region, setRegion] = useState({
     latitude: 20,
@@ -224,10 +232,81 @@ export default function MapScreen({ navigation }) {
     latitudeDelta: 100,
     longitudeDelta: 100,
   });
+  
+  // Bottom sheet animation
+  const bottomSheetAnimation = useRef(new Animated.Value(0.5)).current;
+  const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
+  const lastGestureDy = useRef(0);
+  
+  // Create pan responder for bottom sheet drag gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        // Store the current position when touch starts
+        lastGestureDy.current = bottomSheetAnimation.__getValue();
+        bottomSheetAnimation.setOffset(lastGestureDy.current);
+        bottomSheetAnimation.setValue(0);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // Calculate new position based on drag
+        const newValue = -gestureState.dy / (BOTTOM_SHEET_MAX_HEIGHT - BOTTOM_SHEET_MIN_HEIGHT);
+        // Clamp the value between 0 and 1
+        const clampedValue = Math.min(Math.max(0, newValue + lastGestureDy.current), 1);
+        bottomSheetAnimation.setValue(clampedValue - lastGestureDy.current);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // Reset offset
+        bottomSheetAnimation.flattenOffset();
+        
+        // Get the current position
+        const currentValue = bottomSheetAnimation.__getValue();
+        
+        // Determine which position to snap to based on velocity and position
+        if (gestureState.vy > 0.5) {
+          // Fast downward swipe - collapse
+          snapToPosition(0.5);
+          setBottomSheetExpanded(false);
+        } else if (gestureState.vy < -0.5) {
+          // Fast upward swipe - expand
+          snapToPosition(1);
+          setBottomSheetExpanded(true);
+        } else if (currentValue > 0.75) {
+          // Above 75% - expand
+          snapToPosition(1);
+          setBottomSheetExpanded(true);
+        } else if (currentValue < 0.25) {
+          // Below 25% - collapse to minimum
+          snapToPosition(0);
+          setBottomSheetExpanded(false);
+        } else {
+          // Between 25% and 75% - go to initial position
+          snapToPosition(0.5);
+          setBottomSheetExpanded(false);
+        }
+      }
+    })
+  ).current;
 
   useEffect(() => {
     fetchPosts();
   }, []);
+
+  // Set initial posts for bottom sheet when posts are loaded
+  useEffect(() => {
+    if (posts.length > 0 && !selectedLocation) {
+      setLocationPosts(posts.slice(0, 10)); // Show first 10 posts initially
+    }
+  }, [posts]);
+
+  const snapToPosition = (position) => {
+    Animated.spring(bottomSheetAnimation, {
+      toValue: position,
+      useNativeDriver: false,
+      bounciness: 4,
+      speed: 12
+    }).start();
+  };
 
   const fetchPosts = async () => {
     try {
@@ -338,6 +417,56 @@ export default function MapScreen({ navigation }) {
     setFilteredPosts(posts);
   };
 
+  const handleMarkerPress = (post) => {
+    // Find all posts with the same location name
+    const postsAtLocation = posts.filter(p => 
+      p.location?.name === post.location?.name
+    );
+    
+    setSelectedLocation(post.location);
+    setLocationPosts(postsAtLocation);
+    
+    // Expand the bottom sheet
+    snapToPosition(1);
+    setBottomSheetExpanded(true);
+  };
+
+  const expandBottomSheet = useCallback(() => {
+    setBottomSheetExpanded(true);
+    snapToPosition(1);
+  }, []);
+
+  const collapseBottomSheet = useCallback(() => {
+    setBottomSheetExpanded(false);
+    snapToPosition(0.5);
+    
+    // Reset to show all posts if a location was selected
+    if (selectedLocation) {
+      setSelectedLocation(null);
+      setLocationPosts(posts.slice(0, 10));
+    }
+  }, [posts, selectedLocation]);
+
+  const toggleBottomSheet = useCallback(() => {
+    if (bottomSheetExpanded) {
+      collapseBottomSheet();
+    } else {
+      expandBottomSheet();
+    }
+  }, [bottomSheetExpanded, collapseBottomSheet, expandBottomSheet]);
+
+  const bottomSheetHeight = bottomSheetAnimation.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, BOTTOM_SHEET_INITIAL_HEIGHT, BOTTOM_SHEET_MAX_HEIGHT],
+  });
+
+  // Calculate additional styles based on animation value
+  const indicatorRotation = bottomSheetAnimation.interpolate({
+    inputRange: [0.5, 1],
+    outputRange: ['0deg', '180deg'],
+    extrapolate: 'clamp',
+  });
+
   const renderSearchItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.searchResultItem}
@@ -350,6 +479,52 @@ export default function MapScreen({ navigation }) {
           <Text style={styles.searchResultSubtext}>
             Posted by {item.userId.username || 'Unknown'}
           </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderLocationPost = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.locationPostItem}
+      onPress={() => navigation.navigate('UserProfile', { userId: item.userId._id })}
+    >
+      {item.images && item.images.length > 0 && (
+        <Image 
+          source={{ uri: item.images[0] }} 
+          style={styles.postImage}
+          resizeMode="cover"
+        />
+      )}
+      <View style={styles.postContent}>
+        <Text style={styles.postTitle} numberOfLines={1}>
+          {item.title || 'Travel Post'}
+        </Text>
+        <Text style={styles.postDescription} numberOfLines={2}>
+          {item.description || 'No description available'}
+        </Text>
+        <View style={styles.postFooter}>
+          <View style={styles.userInfo}>
+            {item.userId.profileImage ? (
+              <Image 
+                source={{ uri: item.userId.profileImage }} 
+                style={styles.userAvatar}
+              />
+            ) : (
+              <View style={[styles.userAvatar, styles.defaultAvatar]}>
+                <Text style={styles.avatarText}>
+                  {item.userId.username ? item.userId.username.charAt(0).toUpperCase() : '?'}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.username}>{item.userId.username || 'Unknown'}</Text>
+          </View>
+          <View style={styles.postStats}>
+            <Ionicons name="heart" size={16} color="#ff4757" />
+            <Text style={styles.statsText}>{item.likes?.length || 0}</Text>
+            <Ionicons name="chatbubble" size={16} color="#4a90e2" style={styles.commentIcon} />
+            <Text style={styles.statsText}>{item.comments?.length || 0}</Text>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -394,7 +569,7 @@ export default function MapScreen({ navigation }) {
               title={post.location.name}
               description={`Posted by ${post.userId.username || 'Unknown'}`}
               pinColor="#4a90e2"
-              onPress={() => navigation.navigate('UserProfile', { userId: post.userId._id })}
+              onPress={() => handleMarkerPress(post)}
             />
           ))}
         </MapView>
@@ -431,6 +606,61 @@ export default function MapScreen({ navigation }) {
             </View>
           </TouchableOpacity>
         )}
+
+        {/* Bottom Sheet for Location Posts */}
+        <Animated.View 
+          style={[styles.bottomSheet, { height: bottomSheetHeight }]}
+        >
+          <LinearGradient
+            colors={['#232526', '#414345']}
+            style={styles.bottomSheetContent}
+          >
+            <View 
+              {...panResponder.panHandlers}
+              style={styles.dragHandle}
+            >
+              <View style={styles.bottomSheetHeader}>
+                <View style={styles.bottomSheetHandle} />
+                <Animated.View style={{ transform: [{ rotate: indicatorRotation }] }}>
+                  <Ionicons name="chevron-up" size={24} color="#ffffff" />
+                </Animated.View>
+              </View>
+            </View>
+            
+            {selectedLocation ? (
+              <View style={styles.locationHeader}>
+                <Ionicons name="location" size={24} color="#4a90e2" />
+                <Text style={styles.locationName}>{selectedLocation.name}</Text>
+              </View>
+            ) : (
+              <View style={styles.locationHeader}>
+                <Ionicons name="compass" size={24} color="#4a90e2" />
+                <Text style={styles.locationName}>Explore Travel Posts</Text>
+              </View>
+            )}
+            
+            <Text style={styles.postsTitle}>
+              {selectedLocation 
+                ? `${locationPosts.length} ${locationPosts.length === 1 ? 'Post' : 'Posts'} at this location`
+                : 'Popular travel destinations'
+              }
+            </Text>
+            
+            <FlatList
+              data={locationPosts}
+              renderItem={renderLocationPost}
+              keyExtractor={(item) => item._id}
+              contentContainerStyle={styles.locationPostsList}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptyLocationPosts}>
+                  <Ionicons name="images-outline" size={50} color="#666" />
+                  <Text style={styles.emptyLocationText}>No posts at this location</Text>
+                </View>
+              }
+            />
+          </LinearGradient>
+        </Animated.View>
 
         {/* Search Modal */}
         <Modal
@@ -540,7 +770,7 @@ const styles = StyleSheet.create({
   },
   resetButton: {
     position: 'absolute',
-    bottom: 30,
+    bottom: BOTTOM_SHEET_INITIAL_HEIGHT + 10,
     alignSelf: 'center',
     zIndex: 10,
   },
@@ -574,6 +804,147 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 10,
+    zIndex: 100,
+  },
+  bottomSheetContent: {
+    flex: 1,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+  },
+  dragHandle: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 10,
+  },
+  bottomSheetHeader: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    width: '100%',
+  },
+  bottomSheetHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 3,
+    marginBottom: 10,
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    marginTop: 5,
+  },
+  locationName: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  postsTitle: {
+    color: '#999',
+    fontSize: 14,
+    marginBottom: 15,
+  },
+  locationPostsList: {
+    paddingBottom: 20,
+  },
+  locationPostItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    marginBottom: 15,
+    overflow: 'hidden',
+  },
+  postImage: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#333',
+  },
+  postContent: {
+    padding: 15,
+  },
+  postTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  postDescription: {
+    color: '#cccccc',
+    fontSize: 14,
+    marginBottom: 10,
+    lineHeight: 20,
+  },
+  postFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  defaultAvatar: {
+    backgroundColor: '#4a90e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  username: {
+    color: '#ffffff',
+    fontSize: 13,
+  },
+  postStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statsText: {
+    color: '#cccccc',
+    fontSize: 12,
+    marginLeft: 3,
+    marginRight: 8,
+  },
+  commentIcon: {
+    marginLeft: 8,
+  },
+  emptyLocationPosts: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 30,
+    paddingBottom: 30,
+  },
+  emptyLocationText: {
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 15,
+    fontSize: 16,
   },
   modalContainer: {
     flex: 1,
