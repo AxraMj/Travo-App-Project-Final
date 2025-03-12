@@ -9,7 +9,5 @@ export const authAPI = {
   login: async (credentials) => {
     const response = await api.post('/auth/login', credentials);
     return response.data;
-  },
-
-  // Add more auth-related endpoints as needed
-}; 
+  }
+};

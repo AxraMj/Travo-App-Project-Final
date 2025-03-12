@@ -111,16 +111,30 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Input validation
+    if (!email || !password) {
+      return res.status(400).json({ 
+        status: 'error',
+        message: 'Please enter both your email and password.' 
+      });
+    }
+
     // Check if user exists
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ 
+        status: 'error',
+        message: 'The email you entered isn\'t connected to an account. Sign up for an account.' 
+      });
     }
 
     // Validate password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ 
+        status: 'error',
+        message: 'Sorry, your password was incorrect. Please double-check your password.' 
+      });
     }
 
     // Generate token
@@ -131,6 +145,7 @@ exports.login = async (req, res) => {
     );
 
     res.json({
+      status: 'success',
       token,
       user: {
         id: user._id,
@@ -143,10 +158,9 @@ exports.login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
     res.status(500).json({ 
-      message: 'Server error during login',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      status: 'error',
+      message: 'Something went wrong. Please try again later.' 
     });
   }
 }; 

@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       return userData;
     } catch (error) {
-      console.error('Login error:', error);
+      // Don't log the error to console, just throw it for the component to handle
       throw error;
     }
   };
