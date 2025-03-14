@@ -68,7 +68,7 @@ export default function RegisterScreen({ navigation, route }) {
         userData: formData
       });
     } else {
-      Alert.alert('Error', 'Please fix the errors in the form');
+      // Alert.alert('Please fix the errors in the form');
     }
   };
 
