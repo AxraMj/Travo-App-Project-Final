@@ -111,33 +111,18 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Input validation
-    if (!email || !password) {
-      return res.status(400).json({ 
-        status: 'error',
-        message: 'Please enter both your email and password.' 
-      });
-    }
+    // Check if user exists first
+    const user = await User.findOne({ email: email?.toLowerCase() });
 
-    // Check if user exists
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ 
-        status: 'error',
-        message: 'The email you entered isn\'t connected to an account. Sign up for an account.' 
-      });
-    }
-
-    // Validate password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
+    // Validate credentials
+    if (!user || !await bcrypt.compare(password || '', user.password)) {
       return res.status(401).json({ 
         status: 'error',
         message: 'Sorry, your password was incorrect. Please double-check your password.' 
       });
     }
 
-    // Generate token
+    // If login successful, generate token
     const token = jwt.sign(
       { userId: user._id, accountType: user.accountType },
       process.env.JWT_SECRET,
@@ -160,7 +145,7 @@ exports.login = async (req, res) => {
   } catch (error) {
     res.status(500).json({ 
       status: 'error',
-      message: 'Something went wrong. Please try again later.' 
+      message: 'An error occurred. Please try again later.' 
     });
   }
 }; 

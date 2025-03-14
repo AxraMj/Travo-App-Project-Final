@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -17,59 +17,49 @@ import { useAuth } from '../../context/AuthContext';
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }) {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const { login } = useAuth();
+  const [touched, setTouched] = useState({
+    email: false,
+    password: false
+  });
 
-  const validateForm = () => {
-    let newErrors = {};
+  const validate = () => {
+    const newErrors = {};
     
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email) {
-      newErrors.email = 'Email is required';
-    } else if (!emailRegex.test(email)) {
-      newErrors.email = 'Please enter a valid email';
+    if (!email && touched.email) {
+      newErrors.email = 'Please enter your email.';
     }
-
-    // Password validation
-    if (!password) {
-      newErrors.password = 'Password is required';
+    
+    if (!password && touched.password) {
+      newErrors.password = 'Please enter your password.';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleLogin = async () => {
-    // Clear any previous errors
-    setErrors({});
-    
-    // Validate form
-    if (!validateForm()) {
-      return;
-    }
+  useEffect(() => {
+    validate();
+  }, [email, password]);
 
-    setIsLoading(true);
+  const handleLogin = async () => {
     try {
+      setIsLoading(true);
       const userData = await login({ email, password });
       
-      // Navigate based on account type
       if (userData.accountType === 'creator') {
         navigation.replace('CreatorHome');
       } else {
         navigation.replace('ExplorerHome');
       }
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Something went wrong. Please try again.';
-      
-      // Show error message in a banner at the top
-      setErrors({ 
-        banner: errorMessage,
-        showSignUp: errorMessage.includes('Sign up for an account')
+      setErrors({
+        auth: error.response?.data?.message || 'An error occurred during login.'
       });
     } finally {
       setIsLoading(false);
@@ -129,13 +119,17 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.inputContainer}>
             <View style={styles.inputWrapper}>
               <TextInput
-                style={[styles.input, errors.banner && styles.inputError]}
+                style={[
+                  styles.input,
+                  touched.email && !email && styles.inputError
+                ]}
                 placeholder="Email"
                 placeholderTextColor="rgba(255,255,255,0.5)"
                 value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  setErrors({});
+                onChangeText={setEmail}
+                onBlur={() => {
+                  setTouched(prev => ({ ...prev, email: true }));
+                  validate();
                 }}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -143,15 +137,19 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             <View style={styles.inputWrapper}>
-              <View style={[styles.passwordContainer, errors.banner && styles.inputError]}>
+              <View style={[
+                styles.passwordContainer,
+                touched.password && !password && styles.inputError
+              ]}>
                 <TextInput
                   style={styles.passwordInput}
                   placeholder="Password"
                   placeholderTextColor="rgba(255,255,255,0.5)"
                   value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    setErrors({});
+                  onChangeText={setPassword}
+                  onBlur={() => {
+                    setTouched(prev => ({ ...prev, password: true }));
+                    validate();
                   }}
                   secureTextEntry={!showPassword}
                 />
@@ -169,16 +167,26 @@ export default function LoginScreen({ navigation }) {
             </View>
           </View>
 
+          {errors.auth && (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color="#FF3B30" />
+              <Text style={styles.errorMessage}>{errors.auth}</Text>
+            </View>
+          )}
+
           <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={[styles.button, isLoading && styles.buttonDisabled]}
+            <TouchableOpacity
+              style={[
+                styles.loginButton,
+                (!email || !password) && styles.loginButtonDisabled
+              ]}
               onPress={handleLogin}
-              disabled={isLoading}
+              disabled={!email || !password || isLoading}
             >
               {isLoading ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
-                <Text style={styles.buttonText}>Log in</Text>
+                <Text style={styles.loginButtonText}>Log in</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -216,24 +224,76 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   inputContainer: {
-    gap: 15,
-    marginBottom: 30,
+    gap: 16,
+    marginBottom: 24,
   },
   inputWrapper: {
-    gap: 5,
+    width: '100%',
   },
   input: {
     backgroundColor: 'rgba(255,255,255,0.1)',
-    padding: 15,
-    borderRadius: 10,
+    height: 50,
+    borderRadius: 8,
+    paddingHorizontal: 16,
     color: '#ffffff',
     fontSize: 16,
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  inputError: {
-    borderColor: 'rgba(255, 107, 107, 0.5)',
+  passwordContainer: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    height: 50,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    color: '#ffffff',
+    fontSize: 16,
+  },
+  visibilityIcon: {
+    padding: 12,
+    marginRight: 4,
+  },
+  inputError: {
+    borderColor: '#FF3B30',
+    borderWidth: 1,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorMessage: {
+    color: '#FF3B30',
+    fontSize: 14,
+    flex: 1,
+  },
+  buttonContainer: {
+    marginTop: 8,
+  },
+  loginButton: {
+    backgroundColor: '#0095f6',
+    height: 50,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
+  },
+  loginButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   errorBanner: {
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
@@ -266,40 +326,5 @@ const styles = StyleSheet.create({
     color: '#4A90E2',
     fontSize: 14,
     fontWeight: '600',
-  },
-  passwordContainer: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  passwordInput: {
-    flex: 1,
-    padding: 15,
-    color: '#ffffff',
-    fontSize: 16,
-  },
-  visibilityIcon: {
-    padding: 10,
-    marginRight: 5,
-  },
-  buttonContainer: {
-    gap: 15,
-  },
-  button: {
-    backgroundColor: '#414345',
-    padding: 18,
-    borderRadius: 30,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.7,
   },
 }); 
