@@ -10,6 +10,15 @@ export const postsAPI = {
     }
   },
 
+  updatePost: async (postId, postData) => {
+    try {
+      const response = await api.put(`/posts/${postId}`, postData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   getAllPosts: async () => {
     try {
       const response = await api.get('/posts');

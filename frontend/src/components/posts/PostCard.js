@@ -12,7 +12,8 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
-  ScrollView
+  ScrollView,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -244,6 +245,12 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
     );
   };
 
+  // Handle edit post
+  const handleEditPost = () => {
+    setShowSettings(false);
+    navigation.navigate('CreatePost', { post: localPost });
+  };
+
   const handleFollowPress = async () => {
     if (followLoading) return;
     
@@ -302,29 +309,39 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
       visible={showSettings}
       onRequestClose={() => setShowSettings(false)}
     >
-      <TouchableOpacity 
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowSettings(false)}
-      >
-        <View style={styles.settingsModal}>
-          {user?.id === localPost.userId._id && (
+      <TouchableWithoutFeedback onPress={() => setShowSettings(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.settingsContainer}>
+            {localPost.userId._id === user.id && (
+              <>
+                <TouchableOpacity 
+                  style={styles.settingsOption}
+                  onPress={handleEditPost}
+                >
+                  <Ionicons name="create-outline" size={24} color="#ffffff" />
+                  <Text style={styles.settingsText}>Edit Post</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.settingsOption, styles.deleteOption]}
+                  onPress={handleDeletePost}
+                >
+                  <Ionicons name="trash-outline" size={24} color="#FF6B6B" />
+                  <Text style={[styles.settingsText, styles.deleteText]}>Delete Post</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            
             <TouchableOpacity 
               style={styles.settingsOption}
-              onPress={handleDeletePost}
+              onPress={() => setShowSettings(false)}
             >
-              <Ionicons name="trash-outline" size={24} color="#FF6B6B" />
-              <Text style={[styles.settingsText, { color: '#FF6B6B' }]}>Delete Post</Text>
+              <Ionicons name="close-outline" size={24} color="#ffffff" />
+              <Text style={styles.settingsText}>Cancel</Text>
             </TouchableOpacity>
-          )}
-          <TouchableOpacity 
-            style={styles.settingsOption}
-            onPress={() => setShowSettings(false)}
-          >
-            <Text style={styles.settingsText}>Cancel</Text>
-          </TouchableOpacity>
+          </View>
         </View>
-      </TouchableOpacity>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 
@@ -768,27 +785,40 @@ const styles = StyleSheet.create({
   submitButton: {
     padding: 8,
   },
-  modalOverlay: {
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'flex-end',
   },
-  settingsModal: {
+  settingsContainer: {
     backgroundColor: '#232526',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    gap: 16,
+    paddingBottom: 40,
   },
   settingsOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   settingsText: {
     color: '#ffffff',
     fontSize: 16,
+    marginLeft: 15,
+  },
+  deleteOption: {
+    backgroundColor: 'rgba(255,107,107,0.15)',
+    borderRadius: 10,
+    marginVertical: 10,
+    paddingHorizontal: 10,
+    borderBottomWidth: 0,
+  },
+  deleteText: {
+    color: '#FF6B6B',
+    fontWeight: '600',
   },
   headerRight: {
     flexDirection: 'row',

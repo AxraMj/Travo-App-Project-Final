@@ -16,6 +16,9 @@ router.get('/saved', postController.getSavedPosts);
 // Create a new post
 router.post('/', postController.createPost);
 
+// Update an existing post (owner only)
+router.put('/:postId', postController.updatePost);
+
 // Like/unlike a post
 router.post('/:postId/like', postController.likePost);
 

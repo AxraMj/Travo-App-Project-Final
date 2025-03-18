@@ -20,7 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 import { postsAPI } from '../../services/api/';
 import { showErrorAlert } from '../../utils/errorHandler';
 
-export default function CreatePostScreen({ navigation }) {
+export default function CreatePostScreen({ navigation, route }) {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isLocationLoading, setIsLocationLoading] = useState(false);
@@ -34,6 +34,33 @@ export default function CreatePostScreen({ navigation }) {
   const [travelTips, setTravelTips] = useState(['']);
   const [locationSuggestions, setLocationSuggestions] = useState([]);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  
+  // Track if we're editing an existing post
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [postId, setPostId] = useState(null);
+
+  // Check if we're in edit mode and load post data
+  useEffect(() => {
+    if (route.params?.post) {
+      const post = route.params.post;
+      setIsEditMode(true);
+      setPostId(post._id);
+      
+      // Load existing post data
+      if (post.image) setImage(post.image);
+      if (post.description) setDescription(post.description);
+      if (post.location) {
+        setLocationName(post.location.name);
+        setCurrentLocation(post.location.coordinates);
+      }
+      if (post.weather) setWeatherData(post.weather);
+      
+      // Load travel tips or initialize with one empty tip
+      if (post.travelTips && post.travelTips.length > 0) {
+        setTravelTips(post.travelTips);
+      }
+    }
+  }, [route.params]);
 
   // Pick image from library
   const pickImage = async () => {
@@ -299,7 +326,7 @@ export default function CreatePostScreen({ navigation }) {
     }
   };
 
-  // Submit post
+  // Submit post - handle both create and update
   const handleSubmit = async () => {
     if (!image) {
       Alert.alert('Error', 'Please select an image');
@@ -308,7 +335,7 @@ export default function CreatePostScreen({ navigation }) {
 
     try {
       setIsLoading(true);
-      console.log('Starting post creation...');
+      console.log(`Starting post ${isEditMode ? 'update' : 'creation'}...`);
 
       const postData = {
         image: image,
@@ -334,13 +361,16 @@ export default function CreatePostScreen({ navigation }) {
         travelTips: travelTips.filter(tip => tip.trim() !== '')
       };
 
-      console.log('Submitting post with data:', {
-        ...postData,
-        image: postData.image ? 'Image present' : 'No image'
-      });
-
-      const response = await postsAPI.createPost(postData);
-      console.log('Post created successfully:', response);
+      let response;
+      if (isEditMode) {
+        console.log('Updating existing post:', postId);
+        response = await postsAPI.updatePost(postId, postData);
+        console.log('Post updated successfully:', response);
+      } else {
+        console.log('Creating new post');
+        response = await postsAPI.createPost(postData);
+        console.log('Post created successfully:', response);
+      }
 
       // No need for an alert, just reset navigation directly
       navigation.reset({
@@ -354,14 +384,14 @@ export default function CreatePostScreen({ navigation }) {
         ],
       });
     } catch (error) {
-      console.error('Post creation error details:', {
+      console.error(`Post ${isEditMode ? 'update' : 'creation'} error details:`, {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status
       });
       Alert.alert(
         'Error',
-        'Failed to create post. Please try again.',
+        `Failed to ${isEditMode ? 'update' : 'create'} post. Please try again.`,
         [
           {
             text: 'OK',
@@ -388,7 +418,9 @@ export default function CreatePostScreen({ navigation }) {
           >
             <Ionicons name="close" size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Post</Text>
+          <Text style={styles.headerTitle}>
+            {isEditMode ? 'Edit Post' : 'Create Post'}
+          </Text>
           <TouchableOpacity 
             style={[styles.headerButton, isLoading && styles.disabledButton]}
             onPress={handleSubmit}
@@ -397,7 +429,9 @@ export default function CreatePostScreen({ navigation }) {
             {isLoading ? (
               <ActivityIndicator color="#ffffff" size="small" />
             ) : (
-              <Text style={styles.shareText}>Share</Text>
+              <Text style={styles.shareText}>
+                {isEditMode ? 'Save' : 'Share'}
+              </Text>
             )}
           </TouchableOpacity>
         </View>

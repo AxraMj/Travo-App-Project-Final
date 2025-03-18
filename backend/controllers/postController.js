@@ -446,6 +446,60 @@ exports.deletePost = async (req, res) => {
   }
 };
 
+exports.updatePost = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const userId = req.user.userId;
+    
+    // Find the post to update
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    // Verify the user is the owner of the post
+    if (post.userId.toString() !== userId) {
+      return res.status(403).json({ message: 'Not authorized to update this post' });
+    }
+
+    // Check if image is provided
+    if (!req.body.image) {
+      return res.status(400).json({ message: 'Image is required' });
+    }
+
+    // Update fields that can be changed
+    const updateData = {
+      image: req.body.image,
+      description: req.body.description || '',
+      location: req.body.location || post.location,
+      weather: req.body.weather || post.weather,
+      travelTips: req.body.travelTips || post.travelTips
+    };
+
+    // Update the post
+    const updatedPost = await Post.findByIdAndUpdate(
+      postId,
+      { $set: updateData },
+      { new: true } // Return the updated document
+    ).populate('userId', 'username profileImage fullName')
+     .populate('comments.userId', 'username profileImage fullName');
+
+    if (!updatedPost) {
+      return res.status(404).json({ message: 'Post could not be updated' });
+    }
+
+    // Add isLiked and isSaved fields
+    const postObj = updatedPost.toObject();
+    postObj.isLiked = updatedPost.likes.includes(userId);
+    postObj.isSaved = updatedPost.savedBy.includes(userId);
+
+    res.json(postObj);
+  } catch (error) {
+    console.error('Update post error:', error);
+    res.status(500).json({ message: 'Failed to update post' });
+  }
+};
+
 exports.getSavedPosts = async (req, res) => {
   try {
     if (!req.user || !req.user.userId) {
