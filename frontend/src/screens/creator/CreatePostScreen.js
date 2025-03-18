@@ -8,7 +8,9 @@ import {
   TextInput,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  FlatList,
+  Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,12 +24,16 @@ export default function CreatePostScreen({ navigation }) {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isLocationLoading, setIsLocationLoading] = useState(false);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const [image, setImage] = useState(null);
   const [locationName, setLocationName] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
   const [currentLocation, setCurrentLocation] = useState(null);
   const [weatherData, setWeatherData] = useState(null);
   const [description, setDescription] = useState('');
   const [travelTips, setTravelTips] = useState(['']);
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   // Pick image from library
   const pickImage = async () => {
@@ -71,13 +77,14 @@ export default function CreatePostScreen({ navigation }) {
       // Reverse geocode to get address
       const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
       
-      // Get weather data
-      const weatherData = await fetchWeatherData(latitude, longitude);
-
+      const locationString = `${address.city || address.region}, ${address.country}`;
+      
       // Update state
       setCurrentLocation({ latitude, longitude });
-      setLocationName(`${address.city || address.region}, ${address.country}`);
-      setWeatherData(weatherData);
+      setLocationName(locationString);
+      
+      // Get weather data for current location
+      await fetchWeatherForLocation(latitude, longitude, locationString);
     } catch (error) {
       console.log('Location error:', error);
       Alert.alert('Location Error', 'Could not fetch location data');
@@ -86,15 +93,93 @@ export default function CreatePostScreen({ navigation }) {
     }
   };
 
-  // Mock function to fetch weather data
-  const fetchWeatherData = async (lat, lon) => {
-    // In a real app, you would fetch this from a weather API
-    // This is a placeholder
-    return {
-      temp: 28,
-      description: 'Sunny',
-      icon: 'partly-sunny'
-    };
+  // Search locations
+  const searchLocations = async (query) => {
+    if (!query || query.length < 3) {
+      setLocationSuggestions([]);
+      return;
+    }
+
+    try {
+      setIsLocationLoading(true);
+      // Use forward geocoding to search for locations
+      const results = await Location.geocodeAsync(query);
+      
+      if (results.length > 0) {
+        // Reverse geocode to get detailed address
+        const addressPromises = results.slice(0, 5).map(result => 
+          Location.reverseGeocodeAsync({
+            latitude: result.latitude,
+            longitude: result.longitude
+          })
+        );
+        
+        const addressResults = await Promise.all(addressPromises);
+        
+        // Format suggestions
+        const suggestions = addressResults.map((addresses, index) => {
+          const address = addresses[0];
+          return {
+            id: index.toString(),
+            name: `${address.city || address.region || address.subregion || ''}, ${address.country}`,
+            latitude: results[index].latitude,
+            longitude: results[index].longitude
+          };
+        });
+        
+        // Filter out duplicates
+        const uniqueSuggestions = suggestions.filter((suggestion, index, self) =>
+          index === self.findIndex((s) => s.name === suggestion.name)
+        );
+        
+        setLocationSuggestions(uniqueSuggestions);
+      } else {
+        setLocationSuggestions([]);
+      }
+    } catch (error) {
+      console.log('Location search error:', error);
+    } finally {
+      setIsLocationLoading(false);
+    }
+  };
+
+  // Fetch weather data
+  const fetchWeatherForLocation = async (latitude, longitude, locationNameStr) => {
+    setIsWeatherLoading(true);
+    try {
+      // In a real app, you'd use a weather API like OpenWeatherMap
+      // For now, we'll use a mock response
+      const weatherResponse = {
+        temp: Math.floor(Math.random() * 15) + 15, // Random temp between 15-30°C
+        description: ['Sunny', 'Cloudy', 'Rainy', 'Partly Cloudy'][Math.floor(Math.random() * 4)],
+        icon: ['sunny', 'cloudy', 'rainy', 'partly-sunny'][Math.floor(Math.random() * 4)]
+      };
+      
+      setWeatherData(weatherResponse);
+      
+      // Update state with location and weather
+      setCurrentLocation({ latitude, longitude });
+      setLocationName(locationNameStr);
+    } catch (error) {
+      console.log('Weather fetch error:', error);
+    } finally {
+      setIsWeatherLoading(false);
+    }
+  };
+
+  // Select location from suggestions
+  const selectLocation = async (location) => {
+    await fetchWeatherForLocation(location.latitude, location.longitude, location.name);
+    setShowLocationModal(false);
+    setLocationQuery('');
+    setLocationSuggestions([]);
+  };
+
+  // Open location modal
+  const openLocationModal = () => {
+    setLocationQuery('');
+    setLocationSuggestions([]);
+    setShowLocationModal(true);
   };
 
   // Add travel tip
@@ -246,13 +331,17 @@ export default function CreatePostScreen({ navigation }) {
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>Location</Text>
             <View style={styles.locationContainer}>
-              <View style={styles.locationInput}>
+              <TouchableOpacity 
+                style={styles.locationInput}
+                onPress={openLocationModal}
+                disabled={isLocationLoading}
+              >
                 {locationName ? (
                   <Text style={styles.locationText}>{locationName}</Text>
                 ) : (
-                  <Text style={styles.locationPlaceholder}>Add location</Text>
+                  <Text style={styles.locationPlaceholder}>Add or search for a location</Text>
                 )}
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.locationButton}
                 onPress={getCurrentLocation}
@@ -270,7 +359,11 @@ export default function CreatePostScreen({ navigation }) {
           {/* Weather Info (shown if available) */}
           {weatherData && (
             <View style={styles.weatherContainer}>
-              <Ionicons name="partly-sunny" size={24} color="#FFD93D" />
+              {isWeatherLoading ? (
+                <ActivityIndicator color="#ffffff" size="small" style={{marginRight: 10}} />
+              ) : (
+                <Ionicons name={weatherData.icon || "partly-sunny"} size={24} color="#FFD93D" />
+              )}
               <Text style={styles.weatherText}>
                 {weatherData.temp}°C, {weatherData.description}
               </Text>
@@ -315,6 +408,81 @@ export default function CreatePostScreen({ navigation }) {
             ))}
           </View>
         </ScrollView>
+
+        {/* Location Search Modal */}
+        <Modal
+          visible={showLocationModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowLocationModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity 
+                  onPress={() => setShowLocationModal(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <Ionicons name="arrow-back" size={24} color="#ffffff" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Search Location</Text>
+                <View style={styles.placeholder} />
+              </View>
+
+              <View style={styles.searchContainer}>
+                <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search for a location..."
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  value={locationQuery}
+                  onChangeText={(text) => {
+                    setLocationQuery(text);
+                    searchLocations(text);
+                  }}
+                  autoFocus
+                />
+                {locationQuery ? (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setLocationQuery('');
+                      setLocationSuggestions([]);
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={20} color="rgba(255,255,255,0.7)" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {isLocationLoading ? (
+                <ActivityIndicator color="#ffffff" style={styles.loadingIndicator} />
+              ) : (
+                <FlatList
+                  data={locationSuggestions}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      style={styles.suggestionItem}
+                      onPress={() => selectLocation(item)}
+                    >
+                      <Ionicons name="location" size={20} color="#FF6B6B" />
+                      <Text style={styles.suggestionText}>{item.name}</Text>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={
+                    locationQuery.length > 0 ? (
+                      <Text style={styles.noResultsText}>
+                        {locationQuery.length < 3 
+                          ? 'Please enter at least 3 characters to search'
+                          : 'No locations found. Try a different search term.'}
+                      </Text>
+                    ) : null
+                  }
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
       </LinearGradient>
     </View>
   );
@@ -323,41 +491,40 @@ export default function CreatePostScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#232526',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 16,
+    padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   headerButton: {
     padding: 8,
   },
-  headerTitle: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  shareText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   disabledButton: {
     opacity: 0.5,
   },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  shareText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF6B6B',
+  },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 15,
   },
   imageContainer: {
     width: '100%',
-    height: 250,
-    borderRadius: 12,
+    height: 300,
+    borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 20,
   },
@@ -373,16 +540,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imagePlaceholderText: {
-    color: 'rgba(255,255,255,0.7)',
+    color: '#ffffff',
     marginTop: 10,
   },
   sectionContainer: {
     marginBottom: 20,
   },
   sectionTitle: {
-    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+    color: '#ffffff',
     marginBottom: 10,
   },
   locationContainer: {
@@ -392,8 +559,8 @@ const styles = StyleSheet.create({
   locationInput: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    padding: 15,
     marginRight: 10,
   },
   locationText: {
@@ -406,14 +573,16 @@ const styles = StyleSheet.create({
   },
   locationButton: {
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   weatherContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 12,
     marginBottom: 20,
   },
@@ -424,11 +593,11 @@ const styles = StyleSheet.create({
   },
   descriptionInput: {
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    padding: 15,
     color: '#ffffff',
     fontSize: 16,
-    height: 100,
+    minHeight: 100,
     textAlignVertical: 'top',
   },
   tipsHeader: {
@@ -444,10 +613,79 @@ const styles = StyleSheet.create({
   tipInput: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    padding: 15,
     color: '#ffffff',
     fontSize: 16,
     marginRight: 10,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+  },
+  modalContent: {
+    flex: 1,
+    backgroundColor: '#232526',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  modalCloseButton: {
+    padding: 8,
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 10,
+    flex: 1,
+    textAlign: 'center',
+  },
+  placeholder: {
+    width: 40,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 16,
+    marginLeft: 10,
+    marginRight: 10,
+  },
+  loadingIndicator: {
+    marginTop: 20,
+    alignSelf: 'center',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  suggestionText: {
+    color: '#ffffff',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  noResultsText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 30,
+    padding: 20,
   },
 }); 
