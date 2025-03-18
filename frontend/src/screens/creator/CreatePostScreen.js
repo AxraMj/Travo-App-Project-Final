@@ -116,28 +116,103 @@ export default function CreatePostScreen({ navigation }) {
         
         const addressResults = await Promise.all(addressPromises);
         
-        // Format suggestions
+        // Format suggestions with more detailed location information
         const suggestions = addressResults.map((addresses, index) => {
           const address = addresses[0];
+          // Build a more complete location name
+          let locationName = '';
+          
+          // Add district/neighborhood if available (for specific locations like Oia)
+          if (address.district || address.subregion) {
+            locationName += address.district || address.subregion;
+          }
+          
+          // Add city if available and different from district
+          if (address.city && address.city !== address.district && address.city !== address.subregion) {
+            if (locationName) locationName += ', ';
+            locationName += address.city;
+          } else if (address.region && (!locationName || (address.region !== address.district && address.region !== address.subregion))) {
+            // If no city, use region (e.g., state/province)
+            if (locationName) locationName += ', ';
+            locationName += address.region;
+          }
+          
+          // Add country
+          if (address.country) {
+            if (locationName) locationName += ', ';
+            locationName += address.country;
+          }
+          
+          // Fallback if we couldn't build a detailed name
+          if (!locationName) {
+            locationName = `${address.region || address.subregion || ''}, ${address.country || 'Unknown Location'}`;
+          }
+          
           return {
             id: index.toString(),
-            name: `${address.city || address.region || address.subregion || ''}, ${address.country}`,
+            name: locationName,
+            originalQuery: query, // Store the original query in case we need it
             latitude: results[index].latitude,
             longitude: results[index].longitude
           };
         });
         
-        // Filter out duplicates
-        const uniqueSuggestions = suggestions.filter((suggestion, index, self) =>
-          index === self.findIndex((s) => s.name === suggestion.name)
-        );
+        // Improve the filter to detect and prioritize exact matches
+        const uniqueSuggestions = suggestions.filter((suggestion, index, self) => {
+          // First remove exact duplicates
+          const isDuplicate = index !== self.findIndex((s) => s.name === suggestion.name);
+          if (isDuplicate) return false;
+          
+          // Check if this suggestion is already well-represented
+          const lowercaseName = suggestion.name.toLowerCase();
+          const queryParts = query.toLowerCase().split(',').map(part => part.trim());
+          
+          // If the query exactly matches a part of the suggestion, prioritize it
+          if (queryParts.some(part => lowercaseName.includes(part))) {
+            return true;
+          }
+          
+          // Otherwise include it anyway if we don't have many results
+          return self.length < 5;
+        });
         
         setLocationSuggestions(uniqueSuggestions);
       } else {
-        setLocationSuggestions([]);
+        // If Expo's geocoding fails, try with our manual entry
+        if (query.includes(',')) {
+          const parts = query.split(',').map(part => part.trim());
+          if (parts.length >= 2) {
+            // Create a manual entry
+            setLocationSuggestions([{
+              id: 'manual',
+              name: query,
+              originalQuery: query,
+              latitude: 0, // We don't have real coordinates
+              longitude: 0,
+              isManualEntry: true
+            }]);
+          } else {
+            setLocationSuggestions([]);
+          }
+        } else {
+          setLocationSuggestions([]);
+        }
       }
     } catch (error) {
       console.log('Location search error:', error);
+      // Add fallback for manual entry
+      if (query.includes(',')) {
+        setLocationSuggestions([{
+          id: 'manual',
+          name: query,
+          originalQuery: query,
+          latitude: 0,
+          longitude: 0,
+          isManualEntry: true
+        }]);
+      } else {
+        setLocationSuggestions([]);
+      }
     } finally {
       setIsLocationLoading(false);
     }
@@ -169,10 +244,29 @@ export default function CreatePostScreen({ navigation }) {
 
   // Select location from suggestions
   const selectLocation = async (location) => {
-    await fetchWeatherForLocation(location.latitude, location.longitude, location.name);
-    setShowLocationModal(false);
-    setLocationQuery('');
-    setLocationSuggestions([]);
+    try {
+      if (location.isManualEntry) {
+        // For manual entries, we don't have real coordinates, but we can still use the name
+        const mockWeather = {
+          temp: Math.floor(Math.random() * 15) + 15,
+          description: ['Sunny', 'Cloudy', 'Rainy', 'Partly Cloudy'][Math.floor(Math.random() * 4)],
+          icon: ['sunny', 'cloudy', 'rainy', 'partly-sunny'][Math.floor(Math.random() * 4)]
+        };
+        
+        setWeatherData(mockWeather);
+        setLocationName(location.name);
+        setCurrentLocation({ latitude: 0, longitude: 0 });
+      } else {
+        // For geocoded locations, use the coordinates to get weather
+        await fetchWeatherForLocation(location.latitude, location.longitude, location.name);
+      }
+      setShowLocationModal(false);
+      setLocationQuery('');
+      setLocationSuggestions([]);
+    } catch (error) {
+      console.log('Error selecting location:', error);
+      Alert.alert('Error', 'Failed to select location. Please try again.');
+    }
   };
 
   // Open location modal
@@ -433,7 +527,7 @@ export default function CreatePostScreen({ navigation }) {
                 <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search for a location..."
+                  placeholder="Search for a location (e.g., Oia, Santorini, Greece)"
                   placeholderTextColor="rgba(255,255,255,0.5)"
                   value={locationQuery}
                   onChangeText={(text) => {
@@ -465,17 +559,41 @@ export default function CreatePostScreen({ navigation }) {
                       style={styles.suggestionItem}
                       onPress={() => selectLocation(item)}
                     >
-                      <Ionicons name="location" size={20} color="#FF6B6B" />
+                      <Ionicons 
+                        name={item.isManualEntry ? "create-outline" : "location"} 
+                        size={20} 
+                        color="#FF6B6B" 
+                      />
                       <Text style={styles.suggestionText}>{item.name}</Text>
                     </TouchableOpacity>
                   )}
                   ListEmptyComponent={
                     locationQuery.length > 0 ? (
-                      <Text style={styles.noResultsText}>
-                        {locationQuery.length < 3 
-                          ? 'Please enter at least 3 characters to search'
-                          : 'No locations found. Try a different search term.'}
-                      </Text>
+                      <View style={styles.noResultsContainer}>
+                        <Text style={styles.noResultsText}>
+                          {locationQuery.length < 3 
+                            ? 'Please enter at least 3 characters to search'
+                            : 'No locations found. Try a different search term.'}
+                        </Text>
+                        {locationQuery.length >= 3 && (
+                          <TouchableOpacity 
+                            style={styles.manualEntryButton}
+                            onPress={() => {
+                              const manualEntry = {
+                                id: 'manual',
+                                name: locationQuery,
+                                originalQuery: locationQuery,
+                                latitude: 0,
+                                longitude: 0,
+                                isManualEntry: true
+                              };
+                              selectLocation(manualEntry);
+                            }}
+                          >
+                            <Text style={styles.manualEntryText}>Use "{locationQuery}" anyway</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     ) : null
                   }
                 />
@@ -681,11 +799,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 10,
   },
+  noResultsContainer: {
+    alignItems: 'center',
+    marginTop: 30,
+    padding: 20,
+  },
   noResultsText: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 16,
     textAlign: 'center',
-    marginTop: 30,
-    padding: 20,
+    marginBottom: 20,
+  },
+  manualEntryButton: {
+    padding: 12,
+    backgroundColor: 'rgba(255,107,107,0.2)',
+    borderRadius: 10,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  manualEntryText: {
+    color: '#FF6B6B',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 
