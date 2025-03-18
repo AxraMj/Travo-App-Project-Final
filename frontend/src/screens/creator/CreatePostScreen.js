@@ -163,18 +163,17 @@ export default function CreatePostScreen({ navigation }) {
       const response = await postsAPI.createPost(postData);
       console.log('Post created successfully:', response);
 
-      Alert.alert(
-        'Success',
-        'Post created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.navigate('Profile', { refresh: true });
-            }
+      // No need for an alert, just reset navigation directly
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'Home' }, // Reset to home screen first
+          { 
+            name: 'Profile', 
+            params: { refresh: true } // Add refresh param to ensure profile data is updated
           }
-        ]
-      );
+        ],
+      });
     } catch (error) {
       console.error('Post creation error details:', {
         message: error.message,
@@ -183,7 +182,13 @@ export default function CreatePostScreen({ navigation }) {
       });
       Alert.alert(
         'Error',
-        'Failed to create post. Please try again.'
+        'Failed to create post. Please try again.',
+        [
+          {
+            text: 'OK',
+            // Don't navigate on error, just stay on the current screen
+          }
+        ]
       );
     } finally {
       setIsLoading(false);
