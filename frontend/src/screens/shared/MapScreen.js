@@ -15,12 +15,13 @@ import {
   Animated,
   PanResponder
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../context/AuthContext';
 import { postsAPI, guidesAPI } from '../../services/api';
+import * as Location from 'expo-location';
 
 const { width, height } = Dimensions.get('window');
 const BOTTOM_SHEET_MAX_HEIGHT = height * 0.6;
@@ -218,6 +219,7 @@ const darkMapStyle = [
 export default function MapScreen({ navigation, route }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [posts, setPosts] = useState([]);
   const [guides, setGuides] = useState([]);
   const [filteredPosts, setFilteredPosts] = useState([]);
@@ -229,6 +231,15 @@ export default function MapScreen({ navigation, route }) {
   const [locationPosts, setLocationPosts] = useState([]);
   const [locationGuides, setLocationGuides] = useState([]);
   const [selectedItemType, setSelectedItemType] = useState(null); // 'post' or 'guide'
+  const [routeCoordinates, setRouteCoordinates] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [isRoutingEnabled, setIsRoutingEnabled] = useState(false);
+  const [routeDistance, setRouteDistance] = useState(null);
+  const [routeDuration, setRouteDuration] = useState(null);
+  const [routeDirections, setRouteDirections] = useState([]);
+  const [showRouteInfo, setShowRouteInfo] = useState(false);
+  const [transportMode, setTransportMode] = useState('driving'); // Options: driving, walking, cycling
+  const [showTransportOptions, setShowTransportOptions] = useState(false);
   const mapRef = useRef(null);
   const [region, setRegion] = useState({
     latitude: 20,
@@ -237,54 +248,43 @@ export default function MapScreen({ navigation, route }) {
     longitudeDelta: 100,
   });
   
-  // Bottom sheet animation
   const bottomSheetAnimation = useRef(new Animated.Value(0.5)).current;
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
   const lastGestureDy = useRef(0);
   
-  // Create pan responder for bottom sheet drag gestures
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        // Store the current position when touch starts
         lastGestureDy.current = bottomSheetAnimation.__getValue();
         bottomSheetAnimation.setOffset(lastGestureDy.current);
         bottomSheetAnimation.setValue(0);
       },
       onPanResponderMove: (_, gestureState) => {
-        // Calculate new position based on drag
         const newValue = -gestureState.dy / (BOTTOM_SHEET_MAX_HEIGHT - BOTTOM_SHEET_MIN_HEIGHT);
-        // Clamp the value between 0 and 1
         const clampedValue = Math.min(Math.max(0, newValue + lastGestureDy.current), 1);
         bottomSheetAnimation.setValue(clampedValue - lastGestureDy.current);
       },
       onPanResponderRelease: (_, gestureState) => {
-        // Reset offset
         bottomSheetAnimation.flattenOffset();
         
-        // Get the current position
         const currentValue = bottomSheetAnimation.__getValue();
         
-        // Determine which position to snap to based on velocity and position
         if (gestureState.vy > 0.5) {
-          // Fast downward swipe - collapse
           snapToPosition(0.5);
           setBottomSheetExpanded(false);
         } else if (gestureState.vy < -0.5) {
-          // Fast upward swipe - expand
           snapToPosition(1);
           setBottomSheetExpanded(true);
         } else if (currentValue > 0.75) {
-          // Above 75% - expand
           snapToPosition(1);
           setBottomSheetExpanded(true);
         } else if (currentValue < 0.25) {
-          // Below 25% - collapse to minimum
           snapToPosition(0);
           setBottomSheetExpanded(false);
         } else {
-          // Between 25% and 75% - go to initial position
           snapToPosition(0.5);
           setBottomSheetExpanded(false);
         }
@@ -301,15 +301,12 @@ export default function MapScreen({ navigation, route }) {
       });
   }, []);
 
-  // Handle navigation params if coming from a post or guide
   useEffect(() => {
     if (route.params?.selectedLocation) {
       const { selectedLocation, initialPost, initialGuide } = route.params;
       
-      // Set the selected location
       setSelectedLocation(selectedLocation);
       
-      // If we have coordinates, move the map to that location
       if (selectedLocation.coordinates?.latitude && selectedLocation.coordinates?.longitude) {
         const newRegion = {
           latitude: selectedLocation.coordinates.latitude,
@@ -318,24 +315,19 @@ export default function MapScreen({ navigation, route }) {
           longitudeDelta: 0.05,
         };
         
-        // Update region state
         setRegion(newRegion);
         
-        // Animate map to the location
         setTimeout(() => {
           mapRef.current?.animateToRegion(newRegion, 1000);
         }, 500);
       }
       
-      // If we have an initial post, show it in the bottom sheet
       if (initialPost) {
         setLocationPosts([initialPost]);
         snapToPosition(1);
         setBottomSheetExpanded(true);
       } 
-      // If we have an initial guide, show related posts
       else if (initialGuide) {
-        // Find posts with the same location name
         fetchGuides().then(() => {
           const postsWithSameLocation = posts.filter(post => 
             post.location?.name?.toLowerCase() === selectedLocation.name.toLowerCase()
@@ -344,7 +336,6 @@ export default function MapScreen({ navigation, route }) {
           if (postsWithSameLocation.length > 0) {
             setLocationPosts(postsWithSameLocation);
           } else {
-            // If no posts found, show a message
             setLocationPosts([]);
           }
           
@@ -355,12 +346,56 @@ export default function MapScreen({ navigation, route }) {
     }
   }, [route.params, posts]);
 
-  // Set initial posts for bottom sheet when posts are loaded
   useEffect(() => {
     if (posts.length > 0 && !selectedLocation) {
-      setLocationPosts(posts.slice(0, 10)); // Show first 10 posts initially
+      setLocationPosts(posts.slice(0, 10));
     }
   }, [posts]);
+
+  useEffect(() => {
+    const getUserLocation = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission to access location was denied');
+          return;
+        }
+        
+        const location = await Location.getCurrentPositionAsync({});
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      } catch (error) {
+        console.error('Error getting location:', error);
+      }
+    };
+    
+    getUserLocation();
+  }, []);
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    
+    pulse.start();
+    
+    return () => {
+      pulse.stop();
+    };
+  }, [pulseAnim]);
 
   const snapToPosition = (position) => {
     Animated.spring(bottomSheetAnimation, {
@@ -374,14 +409,13 @@ export default function MapScreen({ navigation, route }) {
   const fetchPosts = async () => {
     try {
       const response = await postsAPI.getAllPosts();
-      // Filter posts that have valid location data
       const postsWithLocation = response.filter(post =>
         post.location?.coordinates?.latitude &&
         post.location?.coordinates?.longitude
       );
       setPosts(postsWithLocation);
       setFilteredPosts(postsWithLocation);
-      return postsWithLocation; // Return posts for use in navigation params handler
+      return postsWithLocation;
     } catch (error) {
       console.error('Error fetching posts for map:', error);
       Alert.alert(
@@ -396,7 +430,6 @@ export default function MapScreen({ navigation, route }) {
   const fetchGuides = async () => {
     try {
       const response = await guidesAPI.getAllGuides();
-      // Filter guides that have valid location data
       const guidesWithLocation = response.filter(guide =>
         guide.location && guide.coordinates?.latitude && guide.coordinates?.longitude
       );
@@ -413,7 +446,6 @@ export default function MapScreen({ navigation, route }) {
     }
   };
 
-  // Use goBack() to return to the previous screen
   const handleBackPress = () => {
     navigation.goBack();
   };
@@ -427,7 +459,6 @@ export default function MapScreen({ navigation, route }) {
     
     setIsSearching(true);
     try {
-      // Filter posts and guides based on location name
       const searchResults = posts.filter(post => 
         post.location?.name?.toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -439,7 +470,6 @@ export default function MapScreen({ navigation, route }) {
       setFilteredPosts(searchResults);
       setFilteredGuides(guideResults);
       
-      // If we have results, move the map to the first result
       if (searchResults.length > 0) {
         const firstResult = searchResults[0];
         mapRef.current?.animateToRegion({
@@ -458,7 +488,6 @@ export default function MapScreen({ navigation, route }) {
         }, 1000);
       }
       
-      // Close the search modal if we have results
       if (searchResults.length > 0 || guideResults.length > 0) {
         setIsSearchVisible(false);
       } else {
@@ -482,10 +511,8 @@ export default function MapScreen({ navigation, route }) {
   };
 
   const handleLocationSelect = (post) => {
-    // Filter to show only this post
     setFilteredPosts([post]);
     
-    // Move the map to the selected location
     mapRef.current?.animateToRegion({
       latitude: post.location.coordinates.latitude,
       longitude: post.location.coordinates.longitude,
@@ -502,7 +529,6 @@ export default function MapScreen({ navigation, route }) {
     if (!isSearchVisible) {
       setSearchQuery('');
     } else {
-      // Reset to show all posts when closing search
       setFilteredPosts(posts);
     }
   };
@@ -513,40 +539,42 @@ export default function MapScreen({ navigation, route }) {
   };
 
   const handleMarkerPress = (item, type) => {
-    setSelectedItemType(type);
+    setSelectedLocation({
+      ...item,
+      type: type
+    });
     
     if (type === 'post') {
-      // Find all posts and guides with the same location name
-      const postsAtLocation = posts.filter(p => 
-        p.location?.name === item.location?.name
-      );
-      const guidesAtLocation = guides.filter(g => 
-        g.location?.toLowerCase() === item.location?.name?.toLowerCase()
-      );
-      
-      setSelectedLocation(item.location);
-      setLocationPosts(postsAtLocation);
-      setLocationGuides(guidesAtLocation);
+      setLocationPosts([item]);
+      setLocationGuides([]);
     } else {
-      // For guides, find posts at the same location
-      const postsAtLocation = posts.filter(p => 
-        p.location?.name?.toLowerCase() === item.location?.toLowerCase()
-      );
-      const guidesAtLocation = guides.filter(g => 
-        g.location?.toLowerCase() === item.location?.toLowerCase()
-      );
-      
-      setSelectedLocation({
-        name: item.location,
-        coordinates: item.coordinates
-      });
-      setLocationPosts(postsAtLocation);
-      setLocationGuides(guidesAtLocation);
+      setLocationPosts([]);
+      setLocationGuides([item]);
     }
     
-    // Expand the bottom sheet
-    snapToPosition(1);
+    setSelectedItemType(type);
+    
+    const coordinates = type === 'post' 
+      ? item.location.coordinates 
+      : item.coordinates;
+      
+    mapRef.current?.animateToRegion({
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    }, 1000);
+    
     setBottomSheetExpanded(true);
+    
+    if (!isRoutingEnabled) {
+      setRouteCoordinates(null);
+      setRouteDistance(null);
+      setRouteDuration(null);
+      setRouteDirections([]);
+    } else if (userLocation) {
+      getRoute(userLocation, coordinates);
+    }
   };
 
   const expandBottomSheet = useCallback(() => {
@@ -558,7 +586,6 @@ export default function MapScreen({ navigation, route }) {
     setBottomSheetExpanded(false);
     snapToPosition(0.5);
     
-    // Reset to show all posts if a location was selected
     if (selectedLocation) {
       setSelectedLocation(null);
       setLocationPosts(posts.slice(0, 10));
@@ -578,11 +605,20 @@ export default function MapScreen({ navigation, route }) {
     outputRange: [0, BOTTOM_SHEET_INITIAL_HEIGHT, BOTTOM_SHEET_MAX_HEIGHT],
   });
 
-  // Calculate additional styles based on animation value
   const indicatorRotation = bottomSheetAnimation.interpolate({
     inputRange: [0.5, 1],
     outputRange: ['0deg', '180deg'],
     extrapolate: 'clamp',
+  });
+
+  const pulseSize = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [24, 32],
+  });
+  
+  const pulseOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.7, 0],
   });
 
   const renderSearchItem = ({ item }) => (
@@ -683,6 +719,129 @@ export default function MapScreen({ navigation, route }) {
     </TouchableOpacity>
   );
 
+  const getRoute = async (origin, destination) => {
+    try {
+      setIsLoading(true);
+      
+      const response = await fetch(
+        `https://router.project-osrm.org/route/v1/${transportMode}/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson&steps=true`
+      );
+      
+      const data = await response.json();
+      
+      if (data.code !== 'Ok') {
+        throw new Error('Route not found');
+      }
+      
+      const routeCoords = data.routes[0].geometry.coordinates.map(([lng, lat]) => ({
+        latitude: lat,
+        longitude: lng,
+      }));
+      
+      setRouteCoordinates(routeCoords);
+      setRouteDistance((data.routes[0].distance / 1000).toFixed(1));
+      setRouteDuration((data.routes[0].duration / 60).toFixed(0));
+      
+      const steps = data.routes[0].legs[0].steps.map(step => {
+        const type = step.maneuver?.type || 'continue';
+        const modifier = step.maneuver?.modifier || '';
+        const name = step.name || 'unnamed road';
+        
+        let instruction;
+        if (type === 'arrive') {
+          instruction = 'Arrive at destination';
+        } else {
+          const action = getInstructionText(type, modifier);
+          instruction = name !== 'unnamed road' ? `${action} on ${name}` : action;
+        }
+        
+        return {
+          instruction: instruction,
+          distance: (step.distance / 1000).toFixed(1),
+        };
+      });
+      
+      setRouteDirections(steps);
+      setShowRouteInfo(true);
+      
+      if (mapRef.current) {
+        mapRef.current.fitToCoordinates([origin, destination], {
+          edgePadding: { top: 50, right: 50, bottom: 300, left: 50 },
+          animated: true,
+        });
+      }
+    } catch (error) {
+      console.error('Error getting route:', error);
+      Alert.alert('Error', 'Could not find a route to this destination. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getInstructionText = (type, modifier) => {
+    switch (type) {
+      case 'turn':
+        return `Turn ${modifier}`;
+      case 'new name':
+        return 'Continue';
+      case 'depart':
+        return 'Depart';
+      case 'arrive':
+        return 'Arrive';
+      case 'merge':
+        return 'Merge';
+      case 'on ramp':
+        return 'Take on-ramp';
+      case 'off ramp':
+        return 'Take exit';
+      case 'fork':
+        return `Take ${modifier} fork`;
+      case 'end of road':
+        return `Turn ${modifier}`;
+      case 'continue':
+        return 'Continue';
+      case 'roundabout':
+        return 'Enter roundabout';
+      case 'rotary':
+        return 'Enter traffic circle';
+      case 'roundabout turn':
+        return `Take the ${modifier} at the roundabout`;
+      case 'exit roundabout':
+        return 'Exit roundabout';
+      case 'exit rotary':
+        return 'Exit traffic circle';
+      case 'use lane':
+        return `Use ${modifier} lane`;
+      case 'uturn':
+        return 'Make a U-turn';
+      default:
+        return 'Continue';
+    }
+  };
+
+  const toggleRouting = () => {
+    const newState = !isRoutingEnabled;
+    setIsRoutingEnabled(newState);
+    
+    if (newState) {
+      if (selectedLocation && userLocation) {
+        const destCoords = selectedLocation.type === 'post' 
+          ? selectedLocation.location.coordinates 
+          : selectedLocation.coordinates;
+        
+        setRouteCoordinates([userLocation, destCoords]);
+        
+        // Fit map to show both points with better padding
+        mapRef.current?.fitToCoordinates([userLocation, destCoords], {
+          edgePadding: { top: 100, right: 100, bottom: 300, left: 100 },
+          animated: true,
+        });
+      }
+    } else {
+      setRouteCoordinates(null);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -691,7 +850,6 @@ export default function MapScreen({ navigation, route }) {
     );
   }
 
-  // Filter posts based on search query for the search modal
   const searchResults = searchQuery.trim() === '' 
     ? posts 
     : posts.filter(post => 
@@ -712,7 +870,33 @@ export default function MapScreen({ navigation, route }) {
           onRegionChangeComplete={setRegion}
           customMapStyle={darkMapStyle}
         >
-          {/* Post Markers */}
+          {userLocation && (
+            <Marker
+              coordinate={userLocation}
+              title="Your Location"
+              pinColor="#4285F4"
+              zIndex={1000}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.userLocationMarkerContainer}>
+                <Animated.View
+                  style={[
+                    styles.userLocationPulse,
+                    {
+                      width: pulseSize,
+                      height: pulseSize,
+                      borderRadius: Animated.divide(pulseSize, 2),
+                      opacity: pulseOpacity,
+                    },
+                  ]}
+                />
+                <View style={styles.userLocationMarker}>
+                  <View style={styles.userLocationDot} />
+                </View>
+              </View>
+            </Marker>
+          )}
+
           {filteredPosts.map((post) => (
             <Marker
               key={`post-${post._id}`}
@@ -727,7 +911,6 @@ export default function MapScreen({ navigation, route }) {
             />
           ))}
 
-          {/* Guide Markers */}
           {filteredGuides.map((guide) => (
             <Marker
               key={`guide-${guide._id}`}
@@ -741,9 +924,18 @@ export default function MapScreen({ navigation, route }) {
               onPress={() => handleMarkerPress(guide, 'guide')}
             />
           ))}
+
+          {routeCoordinates && (
+            <Polyline
+              coordinates={routeCoordinates}
+              strokeWidth={6}
+              strokeColor="#4285F4"
+              lineCap="round"
+              lineJoin="round"
+            />
+          )}
         </MapView>
 
-        {/* Back Button */}
         <TouchableOpacity 
           style={styles.backButton}
           onPress={handleBackPress}
@@ -753,7 +945,17 @@ export default function MapScreen({ navigation, route }) {
           </View>
         </TouchableOpacity>
 
-        {/* Search Button */}
+        {selectedLocation && userLocation && (
+          <TouchableOpacity 
+            style={styles.routeButton}
+            onPress={toggleRouting}
+          >
+            <View style={[styles.backButtonCircle, isRoutingEnabled && styles.routeButtonActive]}>
+              <Ionicons name="navigate" size={24} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity 
           style={styles.searchButton}
           onPress={toggleSearch}
@@ -763,20 +965,13 @@ export default function MapScreen({ navigation, route }) {
           </View>
         </TouchableOpacity>
 
-        {/* Reset Filter Button - Only show when filtered */}
-        {filteredPosts.length !== posts.length && (
-          <TouchableOpacity 
-            style={styles.resetButton}
-            onPress={() => setFilteredPosts(posts)}
-          >
-            <View style={styles.resetButtonContainer}>
-              <Ionicons name="refresh" size={18} color="#ffffff" />
-              <Text style={styles.resetButtonText}>Show All</Text>
-            </View>
-          </TouchableOpacity>
+        {routeCoordinates && (
+          <View style={styles.routeIndicator}>
+            <Ionicons name="navigate" size={18} color="#ffffff" style={styles.routeIndicatorIcon} />
+            <Text style={styles.routeIndicatorText}>Route to destination</Text>
+          </View>
         )}
 
-        {/* Bottom Sheet for Location Posts */}
         <Animated.View 
           style={[styles.bottomSheet, { height: bottomSheetHeight }]}
         >
@@ -807,7 +1002,6 @@ export default function MapScreen({ navigation, route }) {
               </Text>
             </View>
             
-            {/* Guides Section */}
             {locationGuides.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
@@ -825,7 +1019,6 @@ export default function MapScreen({ navigation, route }) {
               </>
             )}
 
-            {/* Posts Section */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Posts</Text>
               <Text style={styles.sectionCount}>{locationPosts.length}</Text>
@@ -847,7 +1040,6 @@ export default function MapScreen({ navigation, route }) {
           </LinearGradient>
         </Animated.View>
 
-        {/* Search Modal */}
         <Modal
           visible={isSearchVisible}
           transparent={true}
@@ -921,6 +1113,13 @@ export default function MapScreen({ navigation, route }) {
             </View>
           </View>
         </Modal>
+
+        {isLoading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#ffffff" />
+            <Text style={styles.loadingText}>Calculating route...</Text>
+          </View>
+        )}
       </LinearGradient>
       <StatusBar style="light" />
     </View>
@@ -1322,5 +1521,189 @@ const styles = StyleSheet.create({
     color: '#cccccc',
     fontSize: 14,
     lineHeight: 20,
+  },
+  userLocationMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userLocationPulse: {
+    position: 'absolute',
+    backgroundColor: 'rgba(66, 133, 244, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(66, 133, 244, 0.5)',
+  },
+  userLocationMarker: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(66, 133, 244, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  userLocationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4285F4',
+  },
+  routeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 70,
+    zIndex: 10,
+  },
+  routeButtonActive: {
+    backgroundColor: '#4285F4',
+  },
+  showRouteButton: {
+    position: 'absolute',
+    bottom: BOTTOM_SHEET_INITIAL_HEIGHT + 10,
+    alignSelf: 'center',
+    zIndex: 10,
+  },
+  showRouteButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  showRouteButtonText: {
+    color: '#ffffff',
+    marginLeft: 5,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  routeInfoPanel: {
+    position: 'absolute',
+    bottom: BOTTOM_SHEET_MAX_HEIGHT,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(33, 33, 33, 0.9)',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 15,
+    paddingBottom: 20,
+    maxHeight: height * 0.7,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 10,
+    zIndex: 100,
+  },
+  routeInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    paddingBottom: 10,
+  },
+  routeInfoTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  routeInfoSummary: {
+    color: '#4285F4',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  closeRouteInfo: {
+    padding: 5,
+  },
+  routeDirectionsList: {
+    maxHeight: height * 0.5,
+  },
+  routeStep: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  routeInstruction: {
+    color: '#ffffff',
+    fontSize: 14,
+    flex: 1,
+  },
+  routeDistance: {
+    color: '#aaaaaa',
+    fontSize: 12,
+    marginLeft: 10,
+  },
+  transportModeContainer: {
+    position: 'absolute',
+    top: 50,
+    right: 120,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 20,
+    padding: 4,
+    zIndex: 10,
+  },
+  transportModeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 2,
+  },
+  transportModeActive: {
+    backgroundColor: 'rgba(66, 133, 244, 0.3)',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingText: {
+    color: '#ffffff',
+    fontSize: 16,
+    marginTop: 10,
+    fontWeight: '500',
+  },
+  routeIndicator: {
+    position: 'absolute',
+    bottom: BOTTOM_SHEET_INITIAL_HEIGHT + 20,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(66, 133, 244, 0.8)',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  routeIndicatorIcon: {
+    marginRight: 8,
+  },
+  routeIndicatorText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

@@ -11,7 +11,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import PostCard from '../../components/posts/PostCard';
 import GuideCard from '../../components/guides/GuideCard';
 import FollowModal from '../../components/modals/FollowModal';
+import * as Location from 'expo-location';
 
 const { width } = Dimensions.get('window');
 const POST_SIZE = width / 3;
@@ -66,6 +68,11 @@ export default function ProfileScreen({ navigation }) {
   const [followModalType, setFollowModalType] = useState('followers');
   const [followModalData, setFollowModalData] = useState([]);
   const [followModalLoading, setFollowModalLoading] = useState(false);
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [isLocationSearchVisible, setIsLocationSearchVisible] = useState(false);
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
 
   const fetchData = async () => {
     if (!user?.id) return;
@@ -180,7 +187,8 @@ export default function ProfileScreen({ navigation }) {
       const guideData = {
         location: locationInput.trim(),
         locationNote: locationNoteInput.trim(),
-        userId: user.id
+        userId: user.id,
+        coordinates: currentLocation || null
       };
       
       const newGuide = await guidesAPI.createGuide(guideData);
@@ -200,6 +208,7 @@ export default function ProfileScreen({ navigation }) {
       setLocationInput('');
       setLocationNoteInput('');
       setIsCreatingGuide(false);
+      setCurrentLocation(null);
       
     } catch (error) {
       console.error('Guide creation error:', error);
@@ -372,20 +381,144 @@ export default function ProfileScreen({ navigation }) {
     );
   };
 
+  const searchLocations = async (query) => {
+    if (!query || query.length < 3) {
+      setLocationSuggestions([]);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      
+      // Use Expo's geocoding API to search for locations
+      const results = await Location.geocodeAsync(query);
+      
+      if (results.length > 0) {
+        // Reverse geocode to get detailed address
+        const addressPromises = results.slice(0, 5).map(result => 
+          Location.reverseGeocodeAsync({
+            latitude: result.latitude,
+            longitude: result.longitude
+          })
+        );
+        
+        const addressResults = await Promise.all(addressPromises);
+        
+        // Format suggestions
+        const suggestions = addressResults.map((addresses, index) => {
+          const address = addresses[0];
+          let locationName = '';
+          
+          // Build location name with available components
+          if (address.district) locationName += address.district;
+          
+          if (address.city && (!locationName || address.city !== address.district)) {
+            if (locationName) locationName += ', ';
+            locationName += address.city;
+          }
+          
+          if (address.region && (!locationName || address.region !== address.city)) {
+            if (locationName) locationName += ', ';
+            locationName += address.region;
+          }
+          
+          if (address.country) {
+            if (locationName) locationName += ', ';
+            locationName += address.country;
+          }
+          
+          // Fallback if we couldn't build a proper name
+          if (!locationName) {
+            locationName = `${address.region || ''}, ${address.country || 'Unknown Location'}`;
+          }
+          
+          return {
+            id: index.toString(),
+            name: locationName,
+            latitude: results[index].latitude,
+            longitude: results[index].longitude
+          };
+        });
+        
+        // Filter out duplicates
+        const uniqueSuggestions = suggestions.filter((suggestion, index, self) => 
+          index === self.findIndex((s) => s.name === suggestion.name)
+        );
+        
+        setLocationSuggestions(uniqueSuggestions);
+      } else {
+        // If no results are found, allow for manual entry
+        setLocationSuggestions([]);
+      }
+    } catch (error) {
+      console.log('Location search error:', error);
+      setLocationSuggestions([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const selectLocation = (location) => {
+    setLocationInput(location.name);
+    setLocationSearchQuery('');
+    setLocationSuggestions([]);
+    setIsLocationSearchVisible(false);
+    
+    // Set the coordinates for the selected location
+    if (location.latitude && location.longitude) {
+      setCurrentLocation({
+        latitude: location.latitude,
+        longitude: location.longitude
+      });
+    }
+  };
+
+  const addManualLocation = () => {
+    if (locationSearchQuery.trim()) {
+      setLocationInput(locationSearchQuery.trim());
+      setLocationSearchQuery('');
+      setLocationSuggestions([]);
+      setIsLocationSearchVisible(false);
+      // Clear coordinates for manual entry
+      setCurrentLocation(null);
+    }
+  };
+
   const renderGuideContent = () => {
     if (isCreatingGuide) {
       return (
         <View style={styles.createGuideForm}>
           <View style={styles.inputGroup}>
-            <View style={styles.locationInputContainer}>
-              <Ionicons name="location" size={20} color="#ffffff" style={styles.locationIcon} />
-              <TextInput
-                style={styles.locationInput}
-                placeholder="Add location..."
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                value={locationInput}
-                onChangeText={setLocationInput}
-              />
+            <View style={styles.locationRow}>
+              <TouchableOpacity 
+                style={styles.locationInputContainer}
+                onPress={() => setIsLocationSearchVisible(true)}
+              >
+                <Ionicons 
+                  name={currentLocation ? "location" : "location-outline"} 
+                  size={20} 
+                  color={currentLocation ? "#FF6B6B" : "#ffffff"} 
+                  style={styles.locationIcon} 
+                />
+                <Text style={locationInput ? styles.locationInput : styles.locationInputPlaceholder}>
+                  {locationInput || "Add location..."}
+                </Text>
+                {currentLocation && (
+                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{marginLeft: 6}} />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.currentLocationButton}
+                onPress={getCurrentLocation}
+                disabled={isSearching}
+              >
+                {isSearching ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Ionicons name="locate" size={24} color="#FF6B6B" />
+                )}
+              </TouchableOpacity>
             </View>
 
             <TextInput
@@ -458,6 +591,52 @@ export default function ProfileScreen({ navigation }) {
 
   // Get the user data either from the profile response or the auth context
   const userData = profileData?.user || user;
+
+  // Get current location using device GPS
+  const getCurrentLocation = async () => {
+    try {
+      setIsSearching(true);
+      
+      // Request permission to access location
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Permission to access location was denied');
+        setIsSearching(false);
+        return;
+      }
+
+      // Get current location coordinates
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+
+      // Reverse geocode to get address information
+      const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      
+      // Build location name from address components
+      let locationName = '';
+      if (address.city) locationName += address.city;
+      if (address.region && (!locationName || address.region !== address.city)) {
+        if (locationName) locationName += ', ';
+        locationName += address.region;
+      }
+      if (address.country) {
+        if (locationName) locationName += ', ';
+        locationName += address.country;
+      }
+      
+      // Set location info
+      setLocationInput(locationName);
+      setCurrentLocation({ latitude, longitude });
+      setIsLocationSearchVisible(false);
+      
+    } catch (error) {
+      console.log('Error getting current location:', error);
+      Alert.alert('Location Error', 'Could not fetch your current location');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -607,6 +786,92 @@ export default function ProfileScreen({ navigation }) {
         loading={followModalLoading}
         onUserPress={handleUserPress}
       />
+
+      {/* Location Search Modal */}
+      <Modal
+        visible={isLocationSearchVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsLocationSearchVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity 
+                onPress={() => setIsLocationSearchVisible(false)}
+                style={styles.modalBackButton}
+              >
+                <Ionicons name="arrow-back" size={24} color="#ffffff" />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Search Location</Text>
+              <View style={{ width: 24 }} />
+            </View>
+            
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for a location..."
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                value={locationSearchQuery}
+                onChangeText={(text) => {
+                  setLocationSearchQuery(text);
+                  searchLocations(text);
+                }}
+                autoFocus
+              />
+              {locationSearchQuery ? (
+                <TouchableOpacity onPress={() => {
+                  setLocationSearchQuery('');
+                  setLocationSuggestions([]);
+                }}>
+                  <Ionicons name="close-circle" size={20} color="rgba(255,255,255,0.7)" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            
+            {isSearching ? (
+              <ActivityIndicator size="small" color="#ffffff" style={{ marginTop: 20 }} />
+            ) : (
+              <FlatList
+                data={locationSuggestions}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={styles.suggestionItem}
+                    onPress={() => selectLocation(item)}
+                  >
+                    <Ionicons name="location" size={20} color="#FF6B6B" />
+                    <Text style={styles.suggestionText}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  locationSearchQuery.length > 0 ? (
+                    <View style={styles.noResultsContainer}>
+                      <Text style={styles.noResultsText}>
+                        {locationSearchQuery.length < 3 
+                          ? 'Please enter at least 3 characters to search'
+                          : 'No locations found. Try a different search term.'}
+                      </Text>
+                      {locationSearchQuery.length >= 3 && (
+                        <TouchableOpacity 
+                          style={styles.manualEntryButton}
+                          onPress={addManualLocation}
+                        >
+                          <Text style={styles.manualEntryText}>
+                            Use "{locationSearchQuery}" anyway
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ) : null
+                }
+                style={{ maxHeight: 300 }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -824,7 +1089,13 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 16,
   },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   locationInputContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.2)',
@@ -884,5 +1155,95 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  locationInputPlaceholder: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 16,
+    padding: 12,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#232526',
+    borderTopLeftRadius: 15,
+    borderTopRightRadius: 15,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalBackButton: {
+    padding: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 16,
+    marginLeft: 10,
+    marginRight: 10,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  suggestionText: {
+    color: '#ffffff',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  noResultsContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noResultsText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  manualEntryButton: {
+    padding: 12,
+    backgroundColor: 'rgba(255,107,107,0.2)',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  manualEntryText: {
+    color: '#FF6B6B',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  currentLocationButton: {
+    width: 46,
+    height: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
 }); 
