@@ -113,24 +113,44 @@ export default function ProfileSetupScreen({ navigation, route }) {
         accountType
       };
 
-      const response = await authAPI.register(registrationData);
+      try {
+        const response = await authAPI.register(registrationData);
+        
+        await login({
+          email: userData.email,
+          password: userData.password
+        });
 
-      await login({
-        email: userData.email,
-        password: userData.password
-      });
-
-      navigation.reset({
-        index: 0,
-        routes: [{ 
-          name: accountType === 'creator' ? 'CreatorHome' : 'ExplorerHome' 
-        }],
-      });
+        navigation.reset({
+          index: 0,
+          routes: [{ 
+            name: accountType === 'creator' ? 'CreatorHome' : 'ExplorerHome' 
+          }],
+        });
+      } catch (error) {
+        console.error('Registration error:', error);
+        
+        // Handle username conflicts specifically
+        if (error.message && error.message.includes('username')) {
+          setProfileData(prev => ({
+            ...prev,
+            errors: {
+              ...prev.errors,
+              username: error.message
+            }
+          }));
+        } else {
+          Alert.alert(
+            'Registration Failed',
+            error.message || error.response?.data?.message || 'Failed to create account. Please try again.'
+          );
+        }
+      }
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Profile setup error:', error);
       Alert.alert(
-        'Registration Failed',
-        error.response?.data?.message || 'Failed to create account. Please try again.'
+        'Setup Failed',
+        'An unexpected error occurred. Please try again.'
       );
     } finally {
       setIsLoading(false);

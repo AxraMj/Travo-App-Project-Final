@@ -35,8 +35,15 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     try {
       const response = await authAPI.login(credentials);
-      const { token: newToken, user: userData } = response;
-
+      
+      // Extract data safely with fallbacks
+      const newToken = response.token;
+      const userData = response.user;
+      
+      if (!newToken || !userData) {
+        throw new Error('Invalid response format');
+      }
+      
       // Store auth data
       await Promise.all([
         AsyncStorage.setItem('token', newToken),
@@ -45,9 +52,9 @@ export const AuthProvider = ({ children }) => {
 
       setToken(newToken);
       setUser(userData);
-      return userData;
+      
+      return userData; // Return user data for navigation
     } catch (error) {
-      // Don't log the error to console, just throw it for the component to handle
       throw error;
     }
   };

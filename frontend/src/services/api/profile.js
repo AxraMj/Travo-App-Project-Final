@@ -6,7 +6,6 @@ export const profileAPI = {
       const response = await api.get(`/profiles/${userId}`);
       return response.data;
     } catch (error) {
-      console.error('API Error - getProfile:', error);
       throw error;
     }
   },
@@ -16,7 +15,6 @@ export const profileAPI = {
       const response = await api.put('/profiles/update', profileData);
       return response.data;
     } catch (error) {
-      console.error('API Error - updateProfile:', error);
       throw error;
     }
   },
@@ -26,7 +24,6 @@ export const profileAPI = {
       const response = await api.put('/profiles/stats', { stats });
       return response.data;
     } catch (error) {
-      console.error('API Error - updateStats:', error);
       throw error;
     }
   },
@@ -36,7 +33,6 @@ export const profileAPI = {
       const response = await api.post(`/profiles/${userId}/follow`);
       return response.data;
     } catch (error) {
-      console.error('API Error - followUser:', error);
       throw error;
     }
   },
@@ -46,7 +42,6 @@ export const profileAPI = {
       const response = await api.post(`/profiles/${userId}/unfollow`);
       return response.data;
     } catch (error) {
-      console.error('API Error - unfollowUser:', error);
       throw error;
     }
   },
@@ -56,7 +51,6 @@ export const profileAPI = {
       const response = await api.get(`/profiles/${userId}/followers`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching followers:', error);
       throw error;
     }
   },
@@ -66,7 +60,6 @@ export const profileAPI = {
       const response = await api.get(`/profiles/${userId}/following`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching following:', error);
       throw error;
     }
   }

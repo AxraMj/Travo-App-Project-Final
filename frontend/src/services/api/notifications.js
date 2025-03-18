@@ -6,7 +6,6 @@ export const notificationsAPI = {
       const response = await api.get('/notifications');
       return response.data;
     } catch (error) {
-      console.error('API Error - getNotifications:', error);
       throw error;
     }
   },
@@ -16,7 +15,6 @@ export const notificationsAPI = {
       const response = await api.put(`/notifications/${notificationId}/read`);
       return response.data;
     } catch (error) {
-      console.error('API Error - markAsRead:', error);
       throw error;
     }
   },
@@ -26,7 +24,6 @@ export const notificationsAPI = {
       const response = await api.put('/notifications/read-all');
       return response.data;
     } catch (error) {
-      console.error('API Error - markAllAsRead:', error);
       throw error;
     }
   }

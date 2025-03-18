@@ -3,6 +3,8 @@ const User = require('../models/User');
 const Profile = require('../models/Profile');
 const { createNotification } = require('./notificationController');
 const mongoose = require('mongoose');
+const logger = require('../config/logger');
+const { AppError } = require('../middleware/errorHandler');
 
 exports.createPost = async (req, res) => {
   try {

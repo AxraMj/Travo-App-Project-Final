@@ -6,15 +6,9 @@ import { useNotifications } from '../../context/NotificationContext';
 export default function BottomTabBar({ state, navigation }) {
   const { unreadCount, fetchUnreadCount, wsConnected } = useNotifications();
 
-  useEffect(() => {
-    console.log('BottomTabBar - Current unread count:', unreadCount);
-    console.log('BottomTabBar - WebSocket connected:', wsConnected);
-  }, [unreadCount, wsConnected]);
-
   // Fetch notifications when the notifications tab is focused
   useEffect(() => {
     if (state.index === 3) {
-      console.log('Notifications tab focused, fetching notifications...');
       fetchUnreadCount();
     }
   }, [state.index]);
@@ -57,7 +51,6 @@ export default function BottomTabBar({ state, navigation }) {
       <TouchableOpacity 
         style={styles.tabItem} 
         onPress={() => {
-          console.log('Navigating to notifications screen');
           navigation.navigate('Notifications');
         }}
       >

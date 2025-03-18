@@ -6,7 +6,6 @@ export const searchAPI = {
       const response = await api.get(`/search?query=${encodeURIComponent(query)}`);
       return response.data;
     } catch (error) {
-      console.error('API Error - searchAll:', error);
       throw error;
     }
   },
@@ -16,7 +15,6 @@ export const searchAPI = {
       const response = await api.get(`/search/users?query=${encodeURIComponent(query)}`);
       return response.data;
     } catch (error) {
-      console.error('API Error - searchUsers:', error);
       throw error;
     }
   },
@@ -26,7 +24,6 @@ export const searchAPI = {
       const response = await api.get(`/search/locations?query=${encodeURIComponent(query)}`);
       return response.data;
     } catch (error) {
-      console.error('API Error - searchLocations:', error);
       throw error;
     }
   }

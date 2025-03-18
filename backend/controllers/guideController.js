@@ -2,6 +2,8 @@ const Guide = require('../models/Guide');
 const User = require('../models/User');
 const Profile = require('../models/Profile');
 const mongoose = require('mongoose');
+const logger = require('../config/logger');
+const { AppError } = require('../middleware/errorHandler');
 
 exports.createGuide = async (req, res) => {
   try {

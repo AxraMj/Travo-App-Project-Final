@@ -8,15 +8,9 @@ export default function HomeHeader({ navigation, isCreator = false }) {
   const { user } = useAuth();
   const { unreadCount, fetchUnreadCount } = useNotifications();
 
-  // Add debug logging
-  useEffect(() => {
-    console.log('HomeHeader - Current unread count:', unreadCount);
-  }, [unreadCount]);
-
   // Fetch unread count on mount
   useEffect(() => {
     if (isCreator) {
-      console.log('HomeHeader - Fetching initial unread count');
       fetchUnreadCount();
     }
   }, [isCreator]);

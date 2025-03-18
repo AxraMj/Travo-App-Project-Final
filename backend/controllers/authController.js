@@ -2,41 +2,39 @@ const User = require('../models/User');
 const Profile = require('../models/Profile');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const logger = require('../config/logger');
+const { AppError } = require('../middleware/errorHandler');
 
-exports.register = async (req, res) => {
+exports.register = async (req, res, next) => {
   try {
-    console.log('Received registration request');
+    logger.info('Received registration request', { 
+      email: req.body.email,
+      accountType: req.body.accountType 
+    });
+
     const { fullName, email, password, accountType, username, profileImage } = req.body;
 
     // Validate required fields
     if (!fullName || !email || !password || !accountType) {
-      return res.status(400).json({ 
-        message: 'Missing required fields' 
-      });
+      throw new AppError(400, 'Missing required fields');
     }
 
     // Additional validation for creator accounts
     if (accountType === 'creator' && !username) {
-      return res.status(400).json({ 
-        message: 'Username is required for creator accounts' 
-      });
+      throw new AppError(400, 'Username is required for creator accounts');
     }
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({ 
-        message: 'Email already registered' 
-      });
+      throw new AppError(409, 'Email already registered');
     }
 
     // Check username uniqueness for all accounts
     if (username) {
       const existingUsername = await User.findOne({ username });
       if (existingUsername) {
-        return res.status(409).json({ 
-          message: 'Username already taken' 
-        });
+        throw new AppError(409, 'Username already taken');
       }
     }
 
@@ -50,7 +48,7 @@ exports.register = async (req, res) => {
       email,
       password: hashedPassword,
       accountType,
-      username, // Store username for all account types
+      username,
       profileImage: profileImage || 'https://via.placeholder.com/150'
     };
 
@@ -85,6 +83,11 @@ exports.register = async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    logger.info('User registered successfully', { 
+      userId: user._id,
+      accountType: user.accountType 
+    });
+
     // Send response
     res.status(201).json({
       token,
@@ -99,27 +102,43 @@ exports.register = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ 
-      message: 'Server error during registration',
-      error: process.env.NODE_ENV === 'development' ? error.toString() : undefined
+    logger.error('Registration error:', { 
+      error: error.message,
+      stack: error.stack 
     });
+    next(error);
   }
 };
 
-exports.login = async (req, res) => {
+exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
+    // Check if email and password are provided
+    if (!email || !password) {
+      throw new AppError(400, 'Please provide both email and password');
+    }
+
     // Check if user exists first
     const user = await User.findOne({ email: email?.toLowerCase() });
-
-    // Validate credentials
-    if (!user || !await bcrypt.compare(password || '', user.password)) {
-      return res.status(401).json({ 
-        status: 'error',
-        message: 'Sorry, your password was incorrect. Please double-check your password.' 
+    if (!user) {
+      // Log the attempt for security monitoring
+      logger.warn('Login attempt with non-existent email', { 
+        email: email?.toLowerCase(),
+        ip: req.ip 
       });
+      throw new AppError(401, 'No account found with this email');
+    }
+
+    // Validate password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      // Log failed password attempt
+      logger.warn('Failed password attempt', { 
+        userId: user._id,
+        ip: req.ip 
+      });
+      throw new AppError(401, 'Incorrect password');
     }
 
     // If login successful, generate token
@@ -128,6 +147,11 @@ exports.login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    logger.info('User logged in successfully', { 
+      userId: user._id,
+      accountType: user.accountType 
+    });
 
     res.json({
       status: 'success',
@@ -143,9 +167,12 @@ exports.login = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ 
-      status: 'error',
-      message: 'An error occurred. Please try again later.' 
+    logger.error('Login error:', { 
+      error: error.message,
+      stack: error.stack,
+      email: req.body.email?.toLowerCase(),
+      ip: req.ip
     });
+    next(error);
   }
 }; 

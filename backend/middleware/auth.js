@@ -23,10 +23,8 @@ module.exports = (req, res, next) => {
       accountType: decoded.accountType
     };
     
-    console.log('Auth middleware - User:', req.user); // Add logging
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
     res.status(401).json({ message: 'Authentication failed' });
   }
 }; 
