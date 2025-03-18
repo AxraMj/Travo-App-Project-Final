@@ -7,7 +7,7 @@ const { AppError } = require('../middleware/errorHandler');
 
 exports.createGuide = async (req, res) => {
   try {
-    const { location, locationNote } = req.body;
+    const { location, locationNote, coordinates } = req.body;
     const userId = req.user.userId;
 
     // Get user data
@@ -20,6 +20,7 @@ exports.createGuide = async (req, res) => {
       userId,
       location,
       locationNote,
+      coordinates: coordinates || null, // Store coordinates if provided
       likes: 0,
       dislikes: 0
     });
@@ -31,6 +32,7 @@ exports.createGuide = async (req, res) => {
       _id: guide._id,
       location: guide.location,
       locationNote: guide.locationNote,
+      coordinates: guide.coordinates,
       username: user.username,
       userImage: user.profileImage,
       likes: guide.likes,

@@ -10,6 +10,16 @@ const guideSchema = new mongoose.Schema({
     type: String,
     maxLength: 100
   },
+  coordinates: {
+    latitude: {
+      type: Number,
+      default: null
+    },
+    longitude: {
+      type: Number,
+      default: null
+    }
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
