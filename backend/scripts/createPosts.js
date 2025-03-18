@@ -151,19 +151,19 @@ const locations = [
 ];
 
 const images = [
-  'https://images.unsplash.com/photo-1503614472-8c93d56e92ce?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Moraine Lake
-  'https://images.unsplash.com/photo-1526481280693-3bfa7568e0f3?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Kyoto
-  'https://images.unsplash.com/photo-1526392060635-9d6019884377?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Machu Picchu
-  'https://images.unsplash.com/photo-1503614472-8c93d56e92ce?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Banff National Park
-  'https://images.unsplash.com/photo-1515859005217-8a1f08870f59?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Amalfi Coast
-  'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Bali
-  'https://images.unsplash.com/photo-1519312925718-5d0f0a4bcd32?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Cappadocia
-  'https://images.unsplash.com/photo-1505765050516-f72dcac9c60e?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Northern Lights
-  'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Great Barrier Reef
-  'https://images.unsplash.com/photo-1503174971373-b1f69850bded?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Sahara Desert
-  'https://images.unsplash.com/photo-1528181304800-259b08848526?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Angkor Wat
-  'https://images.unsplash.com/photo-1515859005217-8a1f08870f59?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80', // Cinque Terre
-  'https://images.unsplash.com/photo-1515859005217-8a1f08870f59?ixlib=rb-1.2.1&auto=format&fit=crop&w=1600&q=80'  // Zhangjiajie
+  'https://banfflakelouise.bynder.com/m/28c7ee5c2966fbb4/892x1200_jpg-2022_MoraineLake_TravelAlberta_RothandRamberg%20(2).jpg', // Moraine Lake
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR40FZyiNuX0zp4jGLkiCT4Q1qT132H75RHww&s', // Kyoto
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRN6S1rB6uocAEZklktrtAbWVgGqi9HwpGyZg&s', // Machu Picchu
+  'https://upload.wikimedia.org/wikipedia/commons/c/c5/Moraine_Lake_17092005.jpg', // Banff National Park
+  'https://media.cntraveller.com/photos/611be701d5b6f5a4a3dee949/16:9/w_2560%2Cc_limit/hotel-santa-caterina-amalfi-italy-conde-nast-traveller-11feb16-pr.jpg', // Amalfi Coast
+  'https://media.digitalnomads.world/wp-content/uploads/2021/01/20120709/bali-for-digital-nomads.jpg', // Bali
+  'https://ihplb.b-cdn.net/wp-content/uploads/2022/02/hot-air-balloning-in-cappadocia-750x430.jpg', // Cappadocia
+  'https://images.ctfassets.net/7mmwp5vb96tc/71299/eb680f506e40a05b30ef3b1693f1d015/norway_northern_lights_hamnoyshutterstock_1504345343.jpg?q=75&w=3840&fm=webp', // Northern Lights
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR48558HsPmU9msGbwcHtUlpggm-DAXADur4OV3UWmBkH3P17fHUEBlm9DyoiwlW5jPF1o&usqp=CAU', // Great Barrier Reef
+  'https://cdn.britannica.com/10/152310-050-5A09D74A/Sand-dunes-Sahara-Morocco-Merzouga.jpg', // Sahara Desert
+  'https://th-thumbnailer.cdn-si-edu.com/TMVzhHVP-GUTRXARVeIMLwVxIJ8=/fit-in/1200x0/https://tf-cmsv2-smithsonianmag-media.s3.amazonaws.com/filer/a1/88/a188a6f4-143d-4df2-b955-f60e7872b307/gg7p00.jpg', // Angkor Wat
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQy09vQRaer5h7NgN1PA0JkufUzdvoHZoFN5Q&s', // Cinque Terre
+  'https://lp-cms-production.imgix.net/2019-06/131954275_high.jpg'  // Zhangjiajie
 ];
 
 async function createPosts() {
