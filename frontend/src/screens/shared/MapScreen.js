@@ -15,13 +15,14 @@ import {
   Animated,
   PanResponder
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../context/AuthContext';
 import { postsAPI, guidesAPI } from '../../services/api';
 import * as Location from 'expo-location';
+import Slider from '@react-native-community/slider';
 
 const { width, height } = Dimensions.get('window');
 const BOTTOM_SHEET_MAX_HEIGHT = height * 0.6;
@@ -240,6 +241,10 @@ export default function MapScreen({ navigation, route }) {
   const [showRouteInfo, setShowRouteInfo] = useState(false);
   const [transportMode, setTransportMode] = useState('driving'); // Options: driving, walking, cycling
   const [showTransportOptions, setShowTransportOptions] = useState(false);
+  const [showNearby, setShowNearby] = useState(false);
+  const [nearbyPosts, setNearbyPosts] = useState([]);
+  const [nearbyRadius, setNearbyRadius] = useState(10); // 10 km default radius
+  const [isNearbyVisible, setIsNearbyVisible] = useState(false);
   const mapRef = useRef(null);
   const [region, setRegion] = useState({
     latitude: 20,
@@ -842,6 +847,106 @@ export default function MapScreen({ navigation, route }) {
     }
   };
 
+  // Calculate distance between two coordinates in kilometers (haversine formula)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Find nearby posts within the specified radius
+  const findNearbyContent = useCallback(() => {
+    if (!userLocation || posts.length === 0) return;
+    
+    const nearby = posts.filter(post => {
+      if (!post.location?.coordinates?.latitude || !post.location?.coordinates?.longitude) {
+        return false;
+      }
+      
+      const distance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        post.location.coordinates.latitude,
+        post.location.coordinates.longitude
+      );
+      
+      // Store the distance in the post object for display
+      post.distance = distance.toFixed(1);
+      
+      // Return posts within the radius
+      return distance <= nearbyRadius;
+    });
+    
+    // Sort by distance
+    nearby.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+    
+    setNearbyPosts(nearby);
+    
+    // If there are nearby posts, show them in the bottom sheet
+    if (nearby.length > 0 && isNearbyVisible) {
+      setLocationPosts(nearby);
+      if (!bottomSheetExpanded) {
+        expandBottomSheet();
+      }
+    }
+  }, [userLocation, posts, nearbyRadius, isNearbyVisible, bottomSheetExpanded]);
+
+  // Toggle nearby content feature
+  const toggleNearby = () => {
+    const newState = !showNearby;
+    setShowNearby(newState);
+    setIsNearbyVisible(newState);
+    
+    if (newState) {
+      // When enabling, find nearby content
+      findNearbyContent();
+      // Update bottom sheet content to show nearby items
+      setSelectedLocation({ name: `Nearby Places (${nearbyRadius}km)` });
+      expandBottomSheet();
+    } else {
+      // When disabling, if no location is selected, show default content
+      if (!selectedLocation || selectedLocation.name.includes('Nearby Places')) {
+        setLocationPosts(posts.slice(0, 10));
+        setSelectedLocation(null);
+      }
+    }
+  };
+
+  // Adjust the radius for nearby content
+  const adjustNearbyRadius = (newRadius) => {
+    setNearbyRadius(newRadius);
+    setSelectedLocation({ name: `Nearby Places (${newRadius}km)` });
+    findNearbyContent();
+  };
+
+  // Add this useEffect to load content on app start
+  useEffect(() => {
+    const setupMap = async () => {
+      try {
+        setLoading(true);
+        const mapPosts = await fetchPosts();
+        const mapGuides = await fetchGuides();
+        
+        if (mapPosts.length > 0) {
+          setLocationPosts(mapPosts.slice(0, 10));
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Error setting up map:', error);
+        setLoading(false);
+      }
+    };
+    
+    setupMap();
+  }, []);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -870,6 +975,21 @@ export default function MapScreen({ navigation, route }) {
           onRegionChangeComplete={setRegion}
           customMapStyle={darkMapStyle}
         >
+          {/* Show radius circle around user location when nearby is active */}
+          {userLocation && showNearby && (
+            <Circle
+              center={{
+                latitude: userLocation.latitude,
+                longitude: userLocation.longitude
+              }}
+              radius={nearbyRadius * 1000} // convert km to meters
+              strokeWidth={2}
+              strokeColor="rgba(66, 133, 244, 0.8)"
+              fillColor="rgba(66, 133, 244, 0.2)"
+              zIndex={1}
+            />
+          )}
+
           {userLocation && (
             <Marker
               coordinate={userLocation}
@@ -956,6 +1076,18 @@ export default function MapScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
 
+        {/* Nearby button */}
+        {userLocation && (
+          <TouchableOpacity 
+            style={styles.nearbyButton}
+            onPress={toggleNearby}
+          >
+            <View style={[styles.backButtonCircle, showNearby && styles.nearbyButtonActive]}>
+              <Ionicons name="locate" size={24} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity 
           style={styles.searchButton}
           onPress={toggleSearch}
@@ -993,16 +1125,110 @@ export default function MapScreen({ navigation, route }) {
             
             <View style={styles.locationHeader}>
               <Ionicons 
-                name={selectedItemType === 'guide' ? "compass" : "location"} 
+                name={showNearby ? "locate" : (selectedItemType === 'guide' ? "compass" : "location")} 
                 size={24} 
-                color={selectedItemType === 'guide' ? "#FF6B6B" : "#4a90e2"} 
+                color={showNearby ? "#4285F4" : (selectedItemType === 'guide' ? "#FF6B6B" : "#4a90e2")} 
               />
               <Text style={styles.locationName}>
-                {selectedLocation ? selectedLocation.name : 'Explore Travel Posts'}
+                {showNearby 
+                  ? `Nearby Places (${nearbyRadius}km)` 
+                  : (selectedLocation ? selectedLocation.name : 'Explore Travel Posts')}
               </Text>
             </View>
             
-            {locationGuides.length > 0 && (
+            {/* Nearby radius slider - visible only when in nearby mode */}
+            {showNearby && (
+              <View style={styles.radiusContainer}>
+                <Text style={styles.radiusText}>Radius: {nearbyRadius} km</Text>
+                <View style={styles.sliderContainer}>
+                  <Text style={styles.sliderLabel}>1</Text>
+                  <Slider
+                    style={styles.radiusSlider}
+                    minimumValue={1}
+                    maximumValue={50}
+                    step={1}
+                    value={nearbyRadius}
+                    onValueChange={adjustNearbyRadius}
+                    minimumTrackTintColor="#4285F4"
+                    maximumTrackTintColor="#555"
+                    thumbTintColor="#4285F4"
+                  />
+                  <Text style={styles.sliderLabel}>50</Text>
+                </View>
+              </View>
+            )}
+            
+            {/* Show nearby posts with distance info when in nearby mode */}
+            {showNearby && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Nearby Places</Text>
+                  <Text style={styles.sectionCount}>{nearbyPosts.length}</Text>
+                </View>
+                
+                <FlatList
+                  data={nearbyPosts}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      style={styles.nearbyItem}
+                      onPress={() => handleMarkerPress(item, 'post')}
+                    >
+                      {item.image && (
+                        <Image 
+                          source={{ uri: item.image }} 
+                          style={styles.nearbyImage}
+                          resizeMode="cover"
+                        />
+                      )}
+                      <View style={styles.nearbyContent}>
+                        <Text style={styles.nearbyTitle} numberOfLines={1}>
+                          {item.location.name}
+                        </Text>
+                        <Text style={styles.nearbyDescription} numberOfLines={2}>
+                          {item.description?.substring(0, 80) || 'No description'}...
+                        </Text>
+                        <View style={styles.nearbyFooter}>
+                          <View style={styles.nearbyDistance}>
+                            <Ionicons name="navigate" size={14} color="#4285F4" />
+                            <Text style={styles.distanceText}>{item.distance} km</Text>
+                          </View>
+                          <View style={styles.nearbyUserInfo}>
+                            {item.userId?.profileImage ? (
+                              <Image 
+                                source={{ uri: item.userId.profileImage }} 
+                                style={styles.nearbyUserAvatar}
+                              />
+                            ) : (
+                              <View style={styles.nearbyUserAvatarDefault}>
+                                <Text style={styles.avatarText}>
+                                  {item.userId?.username ? item.userId.username.charAt(0).toUpperCase() : '?'}
+                                </Text>
+                              </View>
+                            )}
+                            <Text style={styles.nearbyUsername}>{item.userId?.username || 'Unknown'}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                  keyExtractor={(item) => `nearby-${item._id}`}
+                  contentContainerStyle={styles.nearbyList}
+                  showsVerticalScrollIndicator={false}
+                  style={showNearby ? styles.nearbyListVisible : styles.nearbyListHidden}
+                  ListEmptyComponent={
+                    showNearby ? (
+                      <View style={styles.emptyNearby}>
+                        <Ionicons name="location-outline" size={50} color="#666" />
+                        <Text style={styles.emptyNearbyText}>No places found nearby</Text>
+                        <Text style={styles.emptyNearbySubtext}>Try increasing the radius</Text>
+                      </View>
+                    ) : null
+                  }
+                />
+              </>
+            )}
+            
+            {!showNearby && locationGuides.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Travel Guides</Text>
@@ -1019,24 +1245,28 @@ export default function MapScreen({ navigation, route }) {
               </>
             )}
 
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Posts</Text>
-              <Text style={styles.sectionCount}>{locationPosts.length}</Text>
-            </View>
-            
-            <FlatList
-              data={locationPosts}
-              renderItem={renderLocationPost}
-              keyExtractor={(item) => `post-${item._id}`}
-              contentContainerStyle={styles.locationPostsList}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <View style={styles.emptyLocationPosts}>
-                  <Ionicons name="images-outline" size={50} color="#666" />
-                  <Text style={styles.emptyLocationText}>No posts at this location</Text>
+            {!showNearby && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Posts</Text>
+                  <Text style={styles.sectionCount}>{locationPosts.length}</Text>
                 </View>
-              }
-            />
+                
+                <FlatList
+                  data={locationPosts}
+                  renderItem={renderLocationPost}
+                  keyExtractor={(item) => `post-${item._id}`}
+                  contentContainerStyle={styles.locationPostsList}
+                  showsVerticalScrollIndicator={false}
+                  ListEmptyComponent={
+                    <View style={styles.emptyLocationPosts}>
+                      <Ionicons name="images-outline" size={50} color="#666" />
+                      <Text style={styles.emptyLocationText}>No posts at this location</Text>
+                    </View>
+                  }
+                />
+              </>
+            )}
           </LinearGradient>
         </Animated.View>
 
@@ -1149,7 +1379,7 @@ const styles = StyleSheet.create({
   searchButton: {
     position: 'absolute',
     top: 50,
-    right: 20,
+    right: 10,
     zIndex: 10,
   },
   resetButton: {
@@ -1551,7 +1781,7 @@ const styles = StyleSheet.create({
   routeButton: {
     position: 'absolute',
     top: 50,
-    right: 70,
+    right: 170,
     zIndex: 10,
   },
   routeButtonActive: {
@@ -1647,7 +1877,7 @@ const styles = StyleSheet.create({
   transportModeContainer: {
     position: 'absolute',
     top: 50,
-    right: 120,
+    right: 170,
     flexDirection: 'row',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     borderRadius: 20,
@@ -1705,5 +1935,142 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  nearbyButton: {
+    position: 'absolute',
+    top: 50,
+    right: 60,
+    zIndex: 10,
+  },
+  nearbyButtonActive: {
+    backgroundColor: 'rgba(66, 133, 244, 0.8)',
+  },
+  radiusContainer: {
+    marginVertical: 10,
+    padding: 12,
+    backgroundColor: 'rgba(66, 133, 244, 0.1)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(66, 133, 244, 0.3)',
+  },
+  radiusText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  sliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  radiusSlider: {
+    flex: 1,
+    height: 40,
+  },
+  sliderLabel: {
+    color: '#999',
+    fontSize: 12,
+    width: 20,
+    textAlign: 'center',
+  },
+  nearbyList: {
+    paddingBottom: 20,
+  },
+  nearbyListVisible: {
+    display: 'flex',
+    maxHeight: BOTTOM_SHEET_MAX_HEIGHT - 150, // Limit height to ensure it fits
+  },
+  nearbyListHidden: {
+    display: 'none',
+  },
+  nearbyItem: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    elevation: 2,
+  },
+  nearbyImage: {
+    width: 80,
+    height: 80,
+  },
+  nearbyContent: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'space-between',
+  },
+  nearbyTitle: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  nearbyDescription: {
+    color: '#cccccc',
+    fontSize: 12,
+    flex: 1,
+  },
+  nearbyFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  nearbyDistance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(66, 133, 244, 0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  distanceText: {
+    color: '#4285F4',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  nearbyUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  nearbyUserAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 5,
+  },
+  nearbyUserAvatarDefault: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#555',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 5,
+  },
+  nearbyUsername: {
+    color: '#ffffff',
+    fontSize: 12,
+    opacity: 0.8,
+  },
+  emptyNearby: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    marginTop: 20,
+  },
+  emptyNearbyText: {
+    color: '#ffffff',
+    fontSize: 16,
+    marginTop: 10,
+  },
+  emptyNearbySubtext: {
+    color: '#999',
+    fontSize: 14,
+    marginTop: 5,
   },
 });
