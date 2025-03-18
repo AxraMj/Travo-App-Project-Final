@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
-      console.error('Error loading auth state:', error);
+      // Silent error handling
     } finally {
       setIsLoading(false);
     }
@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }) => {
       setToken(null);
       setUser(null);
     } catch (error) {
-      console.error('Logout error:', error);
+      // Handle error silently
     }
   };
 
@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }) => {
       }
       return response;
     } catch (error) {
-      console.error('Profile update error:', error);
+      // Silent error handling
       throw error;
     }
   };

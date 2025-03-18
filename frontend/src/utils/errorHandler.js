@@ -187,26 +187,11 @@ export const handleApiError = async (error, navigation) => {
   // Handle special cases that require navigation
   if (error.response && error.response.status === 401) {
     try {
-      // Only attempt to navigate if navigation object is provided
-      if (navigation) {
-        // Check if user is already on the login screen to avoid navigation loops
-        const currentRoute = navigation.getCurrentRoute?.()?.name;
-        if (currentRoute && currentRoute !== 'Login' && currentRoute !== 'Welcome') {
-          // Give time for the alert to be read
-          setTimeout(() => {
-            AsyncStorage.removeItem('token')
-              .then(() => {
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                });
-              })
-              .catch(() => {
-                // Suppress console error
-              });
-          }, 1500);
-        }
-      }
+      // For 401 errors, just remove the token and the AppNavigator will handle the rest
+      AsyncStorage.removeItem('token')
+        .catch(() => {
+          // Suppress console error
+        });
     } catch (navError) {
       // Suppress console error
     }

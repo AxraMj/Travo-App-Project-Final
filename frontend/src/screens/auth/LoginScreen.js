@@ -52,14 +52,9 @@ export default function LoginScreen({ navigation }) {
       }
 
       setLoading(true);
-      const userData = await login({ email, password });
+      // Login will automatically navigate due to the AppNavigator structure
+      await login({ email, password });
       
-      // Navigate based on account type
-      if (userData.accountType === 'creator') {
-        navigation.replace('CreatorHome');
-      } else {
-        navigation.replace('ExplorerHome');
-      }
     } catch (error) {
       // Handle login errors with field-specific error messages
       setErrors({

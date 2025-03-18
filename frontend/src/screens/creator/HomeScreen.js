@@ -8,7 +8,8 @@ import {
   RefreshControl,
   Image,
   ActivityIndicator,
-  Alert
+  Alert,
+  BackHandler
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,19 @@ export default function CreatorHomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
+  // Handle back button press
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        // Return true to prevent default behavior (going back)
+        return true;
+      }
+    );
+
+    return () => backHandler.remove();
+  }, []);
+
   const fetchPosts = async () => {
     try {
       setError(null);
@@ -41,7 +55,7 @@ export default function CreatorHomeScreen({ navigation }) {
       setPosts(forYouResponse);
       setFollowingPosts(followingResponse);
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      // Silent error handling
       setError('Failed to load posts. Please try again.');
       Alert.alert(
         'Error',

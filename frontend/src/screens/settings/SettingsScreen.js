@@ -15,13 +15,10 @@ export default function SettingsScreen({ navigation }) {
 
   const handleLogout = async () => {
     try {
+      // Just call logout and the navigation structure will handle the rest
       await logout();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Welcome' }],
-      });
     } catch (error) {
-      console.log('Logout error:', error);
+      // Silent error handling
     }
   };
 

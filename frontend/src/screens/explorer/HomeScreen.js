@@ -10,7 +10,8 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Pressable
+  Pressable,
+  BackHandler
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,12 +38,9 @@ export default function ExplorerHomeScreen({ navigation }) {
   const handleLogout = async () => {
     try {
       await logout();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Welcome' }],
-      });
+      // Navigation will be handled automatically by the app navigator
     } catch (error) {
-      console.error('Logout error:', error);
+      // Silent error handling
     }
   };
 
@@ -62,7 +60,7 @@ export default function ExplorerHomeScreen({ navigation }) {
         });
       }
     } catch (error) {
-      console.error('Image picking error:', error);
+      // Silent error handling
     }
     setShowDropdown(false);
   };
@@ -81,7 +79,7 @@ export default function ExplorerHomeScreen({ navigation }) {
       setPosts(forYouResponse);
       setFollowingPosts(followingResponse);
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      // Silent error handling
       setError('Failed to load posts. Please try again.');
     } finally {
       setLoading(false);
@@ -94,7 +92,7 @@ export default function ExplorerHomeScreen({ navigation }) {
       const response = await profileAPI.getFollowing(user.id);
       setFollowingUsers(response);
     } catch (error) {
-      console.error('Error fetching following:', error);
+      // Silent error handling
       Alert.alert('Error', 'Failed to load following list');
     } finally {
       setLoadingFollowing(false);
@@ -112,6 +110,19 @@ export default function ExplorerHomeScreen({ navigation }) {
 
   useEffect(() => {
     fetchPosts();
+  }, []);
+
+  // Handle back button press
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        // Return true to prevent default behavior (going back)
+        return true;
+      }
+    );
+
+    return () => backHandler.remove();
   }, []);
 
   const onRefresh = async () => {
