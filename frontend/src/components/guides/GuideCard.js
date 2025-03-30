@@ -4,7 +4,9 @@ import {
   Text, 
   StyleSheet, 
   TouchableOpacity, 
-  Image 
+  Image,
+  Alert,
+  Share
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -28,6 +30,31 @@ const GuideCard = ({
         },
         initialGuide: guide
       });
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      // Create share message
+      const shareMessage = {
+        title: `Travel Guide for ${guide.location}`,
+        message: `${guide.locationNote ? `${guide.locationNote}\n\n` : ''}Location: ${guide.location}\n\nLikes: ${guide.likes}\nDislikes: ${guide.dislikes}\n\nShared via Travo App`,
+      };
+
+      const result = await Share.share(shareMessage);
+      
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          console.log('Shared with activity type:', result.activityType);
+        } else {
+          console.log('Shared successfully');
+        }
+      } else if (result.action === Share.dismissedAction) {
+        console.log('Share dismissed');
+      }
+    } catch (error) {
+      console.error('Share error:', error);
+      Alert.alert('Error', 'Failed to share guide');
     }
   };
 
@@ -100,8 +127,15 @@ const GuideCard = ({
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="share-outline" size={18} color="rgba(255,255,255,0.5)" />
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={handleShare}
+            >
+              <Ionicons 
+                name="share-outline" 
+                size={18} 
+                color="rgba(255,255,255,0.5)" 
+              />
             </TouchableOpacity>
           </View>
         </View>

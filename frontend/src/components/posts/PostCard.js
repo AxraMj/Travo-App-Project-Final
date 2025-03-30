@@ -13,7 +13,8 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  Share
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -261,6 +262,35 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
       );
     } finally {
       setFollowLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      // Create share message
+      const shareMessage = {
+        title: `Post by @${localPost.userId.username}`,
+        message: `${localPost.description}\n\nLocation: ${localPost.location.name}\n\nTravel Tips:\n${localPost.travelTips.map(tip => `• ${tip}`).join('\n')}\n\nShared via Travo App`,
+        url: localPost.image // Include the image URL
+      };
+
+      const result = await Share.share(shareMessage);
+      
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // Shared with activity type of result.activityType
+          console.log('Shared with activity type:', result.activityType);
+        } else {
+          // Shared
+          console.log('Shared successfully');
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // Dismissed
+        console.log('Share dismissed');
+      }
+    } catch (error) {
+      console.error('Share error:', error);
+      Alert.alert('Error', 'Failed to share post');
     }
   };
 
@@ -521,6 +551,17 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
                 color={localPost.isSaved ? "#FFD93D" : "rgba(255,255,255,0.7)"} 
               />
             </Animated.View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleShare}
+          >
+            <Ionicons 
+              name="share-outline" 
+              size={24} 
+              color="rgba(255,255,255,0.7)" 
+            />
           </TouchableOpacity>
         </View>
 

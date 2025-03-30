@@ -10,7 +10,8 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Alert
+  Alert,
+  Share
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -189,6 +190,31 @@ export default function UserProfileScreen({ navigation, route }) {
     }
   };
 
+  const handleShare = async () => {
+    try {
+      // Create share message
+      const shareMessage = {
+        title: `${profile.user.fullName}'s Profile`,
+        message: `${profile.user.fullName} (@${profile.user.username})\n\n${profile.user.bio || 'No bio yet'}\n\nLocation: ${profile.user.location || 'Not specified'}\n\nFollowers: ${profile.user.followers?.length || 0}\nFollowing: ${profile.user.following?.length || 0}\n\nShared via Travo App`,
+      };
+
+      const result = await Share.share(shareMessage);
+      
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          console.log('Shared with activity type:', result.activityType);
+        } else {
+          console.log('Shared successfully');
+        }
+      } else if (result.action === Share.dismissedAction) {
+        console.log('Share dismissed');
+      }
+    } catch (error) {
+      console.error('Share error:', error);
+      Alert.alert('Error', 'Failed to share profile');
+    }
+  };
+
   const renderPostsContent = () => {
     if (posts.length === 0) {
       return (
@@ -283,13 +309,20 @@ export default function UserProfileScreen({ navigation, route }) {
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity 
-              onPress={() => navigation.goBack()}
               style={styles.backButton}
+              onPress={() => navigation.goBack()}
             >
               <Ionicons name="arrow-back" size={24} color="#ffffff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>{profile.user.fullName || 'Profile'}</Text>
-            <View style={styles.placeholder} />
+            
+            <View style={styles.headerRight}>
+              <TouchableOpacity 
+                style={styles.shareButton}
+                onPress={handleShare}
+              >
+                <Ionicons name="share-outline" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Profile Info */}
@@ -598,5 +631,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  shareButton: {
+    padding: 8,
   },
 }); 
