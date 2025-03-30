@@ -87,6 +87,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const resetPassword = async (email, newPassword) => {
+    try {
+      const response = await authAPI.resetPassword(email, newPassword);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const verifyEmail = async (email) => {
+    try {
+      const response = await authAPI.verifyEmail(email);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -94,7 +112,9 @@ export const AuthProvider = ({ children }) => {
       isLoading,
       login, 
       logout,
-      updateUserProfile 
+      updateUserProfile,
+      resetPassword,
+      verifyEmail
     }}>
       {children}
     </AuthContext.Provider>

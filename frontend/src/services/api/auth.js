@@ -93,5 +93,23 @@ export const authAPI = {
     } catch (error) {
       throw new Error('Session expired. Please log in again.');
     }
-  }
+  },
+
+  verifyEmail: async (email) => {
+    try {
+      const response = await api.post('/auth/verify-email', { email });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  resetPassword: async (email, newPassword) => {
+    try {
+      const response = await api.post('/auth/reset-password', { email, newPassword });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
 };

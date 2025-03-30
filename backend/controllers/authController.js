@@ -175,4 +175,78 @@ exports.login = async (req, res, next) => {
     });
     next(error);
   }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    // Validate input
+    if (!email || !newPassword) {
+      return res.status(400).json({ message: 'Email and new password are required' });
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update user's password
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Failed to reset password' });
+  }
+};
+
+exports.verifyEmail = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    // Validate email
+    if (!email) {
+      throw new AppError(400, 'Email is required');
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      throw new AppError(404, 'No account found with this email');
+    }
+
+    // Generate verification token
+    const verificationToken = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // TODO: Send verification email with token
+    // For now, we'll just return success
+    logger.info('Email verification initiated', { 
+      userId: user._id,
+      email: user.email 
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Email verification initiated'
+    });
+
+  } catch (error) {
+    logger.error('Email verification error:', { 
+      error: error.message,
+      stack: error.stack,
+      email: req.body.email 
+    });
+    next(error);
+  }
 }; 

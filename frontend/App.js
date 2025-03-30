@@ -7,6 +7,7 @@ import LoginScreen from './src/screens/auth/LoginScreen';
 import AccountTypeScreen from './src/screens/auth/AccountTypeScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import ProfileSetupScreen from './src/screens/auth/ProfileSetupScreen';
+import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
 import CreatorHomeScreen from './src/screens/creator/HomeScreen';
 import ExplorerHomeScreen from './src/screens/explorer/HomeScreen';
 import SearchScreen from './src/screens/shared/SearchScreen';
@@ -58,6 +59,7 @@ const AuthNavigator = () => {
       <AuthStack.Screen name="AccountType" component={AccountTypeScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
       <AuthStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+      <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
     </AuthStack.Navigator>
   );
 };

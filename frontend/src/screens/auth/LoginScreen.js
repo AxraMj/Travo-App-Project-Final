@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -16,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
 export default function LoginScreen({ navigation }) {
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -144,6 +145,13 @@ export default function LoginScreen({ navigation }) {
                 {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
 
                 <TouchableOpacity
+                  style={styles.forgotPassword}
+                  onPress={() => navigation.navigate('ResetPassword')}
+                >
+                  <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   style={[styles.button, loading && styles.buttonDisabled]}
                   onPress={handleLogin}
                   disabled={loading}
@@ -257,6 +265,14 @@ const styles = StyleSheet.create({
   },
   registerText: {
     color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+  },
+  forgotPasswordText: {
+    color: '#1DA1F2',
     fontSize: 14,
   },
 }); 
