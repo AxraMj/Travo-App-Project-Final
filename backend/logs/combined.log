@@ -122,3 +122,20 @@
 {"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-18 20:42:20","userId":"67d98d5426a4c63187cb6ce8"}
 {"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-18 20:43:00","userId":"67d98d5426a4c63187cb6ce8"}
 {"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-18 20:54:48","userId":"67d98d5426a4c63187cb6ce8"}
+{"accountType":"creator","email":"akjmanoj24@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-03-26 21:04:48"}
+{"accountType":"creator","level":"info","message":"User registered successfully","timestamp":"2025-03-26 21:04:48","userId":"67e41e9843dd30290a032b5d"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-26 21:04:48","userId":"67e41e9843dd30290a032b5d"}
+{"accountType":"explorer","email":"avin@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-03-26 21:09:02"}
+{"accountType":"explorer","level":"info","message":"User registered successfully","timestamp":"2025-03-26 21:09:02","userId":"67e41f9643dd30290a032b9e"}
+{"accountType":"explorer","level":"info","message":"User logged in successfully","timestamp":"2025-03-26 21:09:02","userId":"67e41f9643dd30290a032b9e"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-26 21:14:45","userId":"67e41e9843dd30290a032b5d"}
+{"accountType":"creator","email":"akjmanoj24@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-03-30 20:50:00"}
+{"accountType":"creator","level":"info","message":"User registered successfully","timestamp":"2025-03-30 20:50:00","userId":"67e961202d6696bb3fa82658"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-30 20:50:00","userId":"67e961202d6696bb3fa82658"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-30 20:51:08","userId":"67e961202d6696bb3fa82658"}
+{"accountType":"explorer","email":"manojakshara93@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-03-30 20:56:52"}
+{"accountType":"explorer","level":"info","message":"User registered successfully","timestamp":"2025-03-30 20:56:52","userId":"67e962bc2d6696bb3fa82831"}
+{"accountType":"explorer","level":"info","message":"User logged in successfully","timestamp":"2025-03-30 20:56:53","userId":"67e962bc2d6696bb3fa82831"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-30 20:57:32","userId":"67e961202d6696bb3fa82658"}
+{"accountType":"explorer","level":"info","message":"User logged in successfully","timestamp":"2025-03-30 21:03:39","userId":"67e962bc2d6696bb3fa82831"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-30 21:08:29","userId":"67e961202d6696bb3fa82658"}

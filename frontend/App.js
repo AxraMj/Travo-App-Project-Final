@@ -76,7 +76,7 @@ const CreatorNavigator = () => {
       }}
     >
       <CreatorStack.Screen 
-        name="Home" 
+        name="CreatorHome" 
         component={(props) => (
           <ErrorBoundary>
             <CreatorHomeScreen {...props} />
@@ -109,7 +109,10 @@ const ExplorerNavigator = () => {
         animationEnabled: false
       }}
     >
-      <ExplorerStack.Screen name="Home" component={ExplorerHomeScreen} />
+      <ExplorerStack.Screen 
+        name="ExplorerHome" 
+        component={ExplorerHomeScreen} 
+      />
       <ExplorerStack.Screen name="Search" component={SearchScreen} />
       <ExplorerStack.Screen name="Saved" component={SavedScreen} />
       <ExplorerStack.Screen name="Map" component={MapScreen} />

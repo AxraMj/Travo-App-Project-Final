@@ -63,6 +63,13 @@ const postSchema = new mongoose.Schema({
       required: true,
       maxLength: 500
     },
+    mentions: [{
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      username: String
+    }],
     createdAt: {
       type: Date,
       default: Date.now

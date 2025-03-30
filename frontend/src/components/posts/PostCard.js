@@ -17,8 +17,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { postsAPI, profileAPI } from '../../services/api';
+import { postsAPI, profileAPI, searchAPI } from '../../services/api';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import MentionInput from './MentionInput';
 
 const { width } = Dimensions.get('window');
 
@@ -125,35 +126,25 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
 
     try {
       setIsSubmitting(true);
-      console.log('Adding comment to post:', {
-        postId: localPost._id,
+      
+      // Extract mentions from comment
+      const mentions = newComment.match(/@[\w]+/g) || [];
+      const mentionUsernames = mentions.map(mention => mention.slice(1));
+      
+      const commentData = {
         text: newComment.trim(),
-        userId: user?.id
-      });
+        mentions: mentionUsernames
+      };
       
-      const updatedPost = await postsAPI.addComment(localPost._id, { 
-        text: newComment.trim() 
-      });
+      const updatedPost = await postsAPI.addComment(localPost._id, commentData);
       
-      console.log('Comment added successfully, updated post:', updatedPost);
       setLocalPost(updatedPost);
       setNewComment('');
       if (onPostUpdate) onPostUpdate(updatedPost);
       
-      // Show success message
-      Alert.alert('Success', 'Comment added successfully');
-      
-      // Close comments modal after successful comment
       setShowComments(false);
     } catch (error) {
-      console.error('Comment error details:', {
-        error: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        headers: error.response?.headers
-      });
-      
-      // Determine the error message
+      console.error('Comment error:', error);
       let errorMessage = 'Failed to add comment. Please try again.';
       if (error.response?.status === 404) {
         errorMessage = 'Post not found or has been deleted.';
@@ -162,7 +153,6 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      
       Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -274,32 +264,80 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
     }
   };
 
-  const renderComment = ({ item }) => (
-    <View style={styles.commentContainer}>
-      <TouchableOpacity 
-        style={styles.commentUserInfo}
-        onPress={() => handleUserPress(item.userId._id)}
-      >
-        <Image
-          source={{ uri: item.userId.profileImage }}
-          style={styles.commentUserImage}
-        />
-        <View style={styles.commentContent}>
-          <Text style={styles.commentUsername}>{item.userId.username}</Text>
-          <Text style={styles.commentText}>{item.text}</Text>
-        </View>
-      </TouchableOpacity>
-      
-      {(user.id === item.userId._id || user.id === localPost.userId._id) && (
+  const renderComment = ({ item }) => {
+    const isCommentOwner = item.userId._id === user.id;
+    const isPostOwner = localPost.userId._id === user.id;
+
+    // Process text to highlight mentions
+    const commentText = item.text.split(' ').map((word, index) => {
+      if (word.startsWith('@')) {
+        const username = word.slice(1);
+        // Find the mentioned user's ID from the mentions array
+        const mentionedUser = item.mentions?.find(m => m.username === username);
+        
+        return (
+          <Text 
+            key={index} 
+            style={styles.mentionText} 
+            onPress={() => {
+              if (mentionedUser && mentionedUser.userId) {
+                handleUserPress(mentionedUser.userId);
+              } else {
+                // If user not found in mentions, try to find them by username
+                searchAPI.searchUsers(username)
+                  .then(users => {
+                    const foundUser = users.find(u => u.username === username);
+                    if (foundUser) {
+                      handleUserPress(foundUser._id);
+                    } else {
+                      Alert.alert('Error', 'User not found');
+                    }
+                  })
+                  .catch(error => {
+                    console.error('Error searching for user:', error);
+                    Alert.alert('Error', 'Failed to find user');
+                  });
+              }
+            }}
+          >
+            {word}{' '}
+          </Text>
+        );
+      }
+      return word + ' ';
+    });
+
+    return (
+      <View style={styles.commentItem}>
         <TouchableOpacity
-          style={styles.deleteCommentButton}
-          onPress={() => handleDeleteComment(item._id)}
+          onPress={() => handleUserPress(item.userId._id)}
         >
-          <Ionicons name="trash-outline" size={16} color="rgba(255,255,255,0.6)" />
+          <Image
+            source={{ uri: item.userId.profileImage }}
+            style={styles.commentAvatar}
+          />
         </TouchableOpacity>
-      )}
-    </View>
-  );
+        <View style={styles.commentContent}>
+          <TouchableOpacity
+            onPress={() => handleUserPress(item.userId._id)}
+          >
+            <Text style={styles.commentUsername}>
+              {item.userId.username || item.userId.fullName}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.commentText}>{commentText}</Text>
+        </View>
+        {(isCommentOwner || isPostOwner) && (
+          <TouchableOpacity
+            style={styles.deleteComment}
+            onPress={() => handleDeleteComment(item._id)}
+          >
+            <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   // Settings Modal Component
   const SettingsModal = () => (
@@ -506,17 +544,17 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
       {/* Comments Modal */}
       <Modal
         visible={showComments}
-        transparent={true}
         animationType="slide"
+        transparent={true}
         onRequestClose={() => setShowComments(false)}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Comments</Text>
-              <TouchableOpacity 
-                style={styles.closeButton}
+              <TouchableOpacity
                 onPress={() => setShowComments(false)}
+                style={styles.closeButton}
               >
                 <Ionicons name="close" size={24} color="#ffffff" />
               </TouchableOpacity>
@@ -525,37 +563,28 @@ export default function PostCard({ post, onPostUpdate, onPostDelete }) {
             <FlatList
               data={localPost.comments}
               renderItem={renderComment}
-              keyExtractor={item => item._id}
+              keyExtractor={(item) => item._id}
               contentContainerStyle={styles.commentsList}
-              ListEmptyComponent={
-                <Text style={styles.noComments}>No comments yet</Text>
-              }
             />
 
-            <View style={styles.commentInput}>
-              <TextInput
-                style={styles.input}
-                placeholder="Add a comment..."
-                placeholderTextColor="rgba(255,255,255,0.5)"
+            <View style={styles.commentInputContainer}>
+              <MentionInput
                 value={newComment}
                 onChangeText={setNewComment}
-                multiline
+                placeholder="Add a comment..."
+                style={styles.commentInput}
               />
-              {isSubmitting ? (
-                <ActivityIndicator color="#ffffff" style={styles.submitButton} />
-              ) : (
-                <TouchableOpacity 
-                  style={styles.submitButton}
-                  onPress={handleComment}
-                  disabled={!newComment.trim()}
-                >
-                  <Ionicons 
-                    name="send" 
-                    size={24} 
-                    color={newComment.trim() ? "#FF6B6B" : "rgba(255,255,255,0.3)"} 
-                  />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={handleComment}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Ionicons name="send" size={24} color="#ffffff" />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -727,20 +756,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingVertical: 16,
   },
-  commentContainer: {
+  commentItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  commentUserInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  commentUserImage: {
+  commentAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -757,15 +779,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     fontSize: 14,
   },
-  deleteCommentButton: {
+  deleteComment: {
     padding: 8,
   },
-  noComments: {
-    color: 'rgba(255,255,255,0.5)',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  commentInput: {
+  commentInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
@@ -773,7 +790,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     gap: 12,
   },
-  input: {
+  commentInput: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 20,
@@ -782,7 +799,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     maxHeight: 100,
   },
-  submitButton: {
+  sendButton: {
     padding: 8,
   },
   modalBackdrop: {
@@ -852,5 +869,9 @@ const styles = StyleSheet.create({
   dot: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
+  },
+  mentionText: {
+    color: '#3498db',
+    fontWeight: '600',
   },
 });

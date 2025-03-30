@@ -84,13 +84,12 @@ exports.searchUsers = async (req, res) => {
     }
 
     const users = await User.find({
-      accountType: 'creator', // Only search for creators
       $or: [
         { fullName: new RegExp(query, 'i') },
         { username: new RegExp(query, 'i') }
       ]
     })
-    .select('fullName username profileImage accountType')
+    .select('_id fullName username profileImage accountType')
     .limit(20);
 
     res.json(users);

@@ -22,6 +22,8 @@ exports.getProfile = async (req, res) => {
         location: '',
         socialLinks: {},
         interests: [],
+        followers: [],
+        following: [],
         stats: {
           totalPosts: 0,
           totalGuides: 0,

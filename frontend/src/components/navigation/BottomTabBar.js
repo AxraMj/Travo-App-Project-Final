@@ -2,9 +2,11 @@ import React, { useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNotifications } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
 
 export default function BottomTabBar({ state, navigation }) {
   const { unreadCount, fetchUnreadCount, wsConnected } = useNotifications();
+  const { user } = useAuth();
 
   // Fetch notifications when the notifications tab is focused
   useEffect(() => {
@@ -13,11 +15,16 @@ export default function BottomTabBar({ state, navigation }) {
     }
   }, [state.index]);
 
+  const handleHomePress = () => {
+    // Navigate based on user type
+    navigation.navigate(user?.accountType === 'creator' ? 'CreatorHome' : 'ExplorerHome');
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity 
         style={styles.tabItem} 
-        onPress={() => navigation.navigate('Home')}
+        onPress={handleHomePress}
       >
         <Ionicons 
           name={state.index === 0 ? "home" : "home-outline"} 

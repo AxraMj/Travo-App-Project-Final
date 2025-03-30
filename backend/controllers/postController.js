@@ -5,6 +5,7 @@ const { createNotification } = require('./notificationController');
 const mongoose = require('mongoose');
 const logger = require('../config/logger');
 const { AppError } = require('../middleware/errorHandler');
+const Notification = require('../models/Notification');
 
 exports.createPost = async (req, res) => {
   try {
@@ -268,107 +269,91 @@ exports.savePost = async (req, res) => {
 exports.addComment = async (req, res) => {
   try {
     const { postId } = req.params;
-    const { text } = req.body;
+    const { text, mentions } = req.body;
     const userId = req.user.userId;
 
-    console.log('Adding comment - Request details:', {
-      postId,
-      userId,
-      text,
-      user: req.user,
-      headers: req.headers
-    });
-
-    // Validate inputs
+    // Validate input
     if (!text || !text.trim()) {
-      console.log('Comment validation failed: Empty text');
       return res.status(400).json({ message: 'Comment text is required' });
     }
 
-    if (!postId || !mongoose.Types.ObjectId.isValid(postId)) {
-      console.log('Comment validation failed: Invalid post ID', postId);
-      return res.status(400).json({ message: 'Invalid post ID' });
-    }
-
-    // Find the post
+    // Find post
     const post = await Post.findById(postId);
     if (!post) {
-      console.log('Comment failed: Post not found', postId);
       return res.status(404).json({ message: 'Post not found' });
     }
 
-    console.log('Found post:', {
-      postId: post._id,
-      currentComments: post.comments.length
-    });
+    // Process mentions
+    const mentionsData = [];
+    if (mentions && mentions.length > 0) {
+      // Find all mentioned users
+      const mentionedUsers = await User.find({ username: { $in: mentions } });
+      
+      // Create mentions data
+      mentionsData.push(...mentionedUsers.map(user => ({
+        userId: user._id,
+        username: user.username
+      })));
+    }
 
-    // Create new comment
-    const newComment = {
+    // Create comment
+    const comment = {
       userId,
       text: text.trim(),
-      createdAt: new Date()
+      mentions: mentionsData
     };
 
-    console.log('Created new comment object:', newComment);
-
     // Add comment to post
-    post.comments.push(newComment);
-    console.log('Added comment to post array, new length:', post.comments.length);
+    post.comments.push(comment);
+    await post.save();
 
-    // Save the post
-    const savedPost = await post.save();
-    console.log('Saved post with new comment:', {
-      postId: savedPost._id,
-      newCommentsLength: savedPost.comments.length,
-      lastComment: savedPost.comments[savedPost.comments.length - 1]
-    });
+    // Get the newly added comment's ID
+    const newComment = post.comments[post.comments.length - 1];
 
-    // Create notification for post owner
-    if (post.userId.toString() !== userId) {
-      try {
-        await createNotification(
-          post.userId,
-          userId,
-          'comment',
-          { postId: post._id }
-        );
-        console.log('Created notification for post owner');
-      } catch (notifError) {
-        console.error('Error creating notification:', notifError);
-        // Don't fail the comment operation if notification fails
+    // Create notifications for mentioned users
+    if (mentions && mentions.length > 0) {
+      const mentionedUsers = await User.find({ username: { $in: mentions } });
+      
+      for (const mentionedUser of mentionedUsers) {
+        if (mentionedUser._id.toString() !== userId) { // Don't notify self-mentions
+          await Notification.create({
+            userId: mentionedUser._id,
+            triggeredBy: userId,
+            type: 'mention',
+            postId: post._id,
+            commentId: newComment._id,
+            message: text.trim()
+          });
+        }
       }
     }
 
-    // Fetch updated post with populated fields
-    const updatedPost = await Post.findById(postId)
-      .populate('userId', 'username profileImage fullName')
-      .populate('comments.userId', 'username profileImage fullName');
-
-    if (!updatedPost) {
-      console.log('Error: Could not fetch updated post after comment');
-      return res.status(500).json({ message: 'Error fetching updated post' });
+    // Create notification for post owner (if not self-commenting)
+    if (post.userId.toString() !== userId) {
+      await Notification.create({
+        userId: post.userId,
+        triggeredBy: userId,
+        type: 'comment',
+        postId: post._id
+      });
     }
 
-    console.log('Successfully fetched updated post:', {
-      postId: updatedPost._id,
-      commentsCount: updatedPost.comments.length
-    });
+    // Populate the new comment with user data
+    const populatedPost = await Post.findById(post._id)
+      .populate('userId', 'username fullName profileImage')
+      .populate('comments.userId', 'username fullName profileImage')
+      .populate('comments.mentions.userId', 'username fullName profileImage');
 
-    const postObj = updatedPost.toObject();
-    postObj.isLiked = updatedPost.likes.includes(userId);
-    postObj.isSaved = updatedPost.savedBy.includes(userId);
+    const postObj = populatedPost.toObject();
+    postObj.isLiked = populatedPost.likes.includes(userId);
+    postObj.isSaved = populatedPost.savedBy.includes(userId);
 
-    res.json(postObj);
+    res.status(200).json(postObj);
   } catch (error) {
-    console.error('Add comment error - Full details:', {
-      error: error.message,
-      stack: error.stack,
-      name: error.name,
-      code: error.code
-    });
+    console.error('Add comment error:', error);
     res.status(500).json({ 
       message: 'Failed to add comment',
-      error: process.env.NODE_ENV === 'development' ? error.toString() : undefined
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
