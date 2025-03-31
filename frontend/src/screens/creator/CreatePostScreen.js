@@ -376,7 +376,7 @@ export default function CreatePostScreen({ navigation, route }) {
       navigation.reset({
         index: 1,
         routes: [
-          { name: 'Home' }, // Reset to home screen first
+          { name: 'CreatorHome' }, // Reset to creator home screen first
           { 
             name: 'Profile', 
             params: { refresh: true } // Add refresh param to ensure profile data is updated
