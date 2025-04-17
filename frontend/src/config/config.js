@@ -1,5 +1,5 @@
 // API Configuration
-const IP_ADDRESS = '192.168.31.117'; // Your machine's IP address
+const IP_ADDRESS = '192.168.214.9'; // Server IP address
 const LOCALHOST = 'localhost'; // Use this for web browser testing
 const PORT = '5000';
 

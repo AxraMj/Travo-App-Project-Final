@@ -1,0 +1,105 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run npm audit
+        run: |
+          cd backend
+          npm audit
+          cd ../frontend
+          npm audit
+          
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript
+          
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install Dependencies
+        run: |
+          cd backend
+          npm ci
+          cd ../frontend
+          npm ci
+          
+      - name: Run Tests
+        run: |
+          cd backend
+          npm test
+          cd ../frontend
+          npm test
+
+  build:
+    needs: [security-scan, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Build Backend
+        run: |
+          cd backend
+          npm ci
+          npm run build
+          
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Deploy Backend
+        env:
+          NODE_ENV: production
+        run: |
+          cd backend
+          npm ci
+          npm run build
+          # Add your deployment commands here
+          
+      - name: Deploy Frontend
+        env:
+          NODE_ENV: production
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          # Add your deployment commands here 

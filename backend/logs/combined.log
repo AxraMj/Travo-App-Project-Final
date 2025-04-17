@@ -177,3 +177,30 @@
 {"email":"akjmanoj24@gmail.com","level":"info","message":"Email verification initiated","timestamp":"2025-03-30 22:34:03","userId":"67e961202d6696bb3fa82658"}
 {"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-30 22:34:28","userId":"67e961202d6696bb3fa82658"}
 {"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-31 21:42:38","userId":"67eab047c6ebd7683059bd0b"}
+{"accountType":"explorer","email":"avin@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-03-31 21:54:28"}
+{"accountType":"explorer","level":"info","message":"User registered successfully","timestamp":"2025-03-31 21:54:28","userId":"67eac1bca1ad9e4c980c23f1"}
+{"accountType":"explorer","level":"info","message":"User logged in successfully","timestamp":"2025-03-31 21:54:28","userId":"67eac1bca1ad9e4c980c23f1"}
+{"email":"akjmanoj24@gmail.com","level":"info","message":"Email verification initiated","timestamp":"2025-03-31 21:55:52","userId":"67eab047c6ebd7683059bd0b"}
+{"email":"akjmanoj24@gmail.com","level":"info","message":"Email verification initiated","timestamp":"2025-03-31 21:56:06","userId":"67eab047c6ebd7683059bd0b"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-31 21:56:22","userId":"67eab047c6ebd7683059bd0b"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-31 22:05:10","userId":"67eab047c6ebd7683059bd0b"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-03-31 22:11:32","userId":"67eab047c6ebd7683059bd0b"}
+{"accountType":"creator","email":"akjmanoj24@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-04-01 10:26:03"}
+{"accountType":"creator","level":"info","message":"User registered successfully","timestamp":"2025-04-01 10:26:03","userId":"67eb71e3171090f7ca93883d"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-04-01 10:26:03","userId":"67eb71e3171090f7ca93883d"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-04-01 10:30:52","userId":"67eb71e3171090f7ca93883d"}
+{"accountType":"explorer","email":"avin@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-04-01 10:36:18"}
+{"accountType":"explorer","level":"info","message":"User registered successfully","timestamp":"2025-04-01 10:36:18","userId":"67eb744a171090f7ca9389cf"}
+{"accountType":"explorer","level":"info","message":"User logged in successfully","timestamp":"2025-04-01 10:36:18","userId":"67eb744a171090f7ca9389cf"}
+{"accountType":"explorer","level":"info","message":"User logged in successfully","timestamp":"2025-04-01 10:37:23","userId":"67eb744a171090f7ca9389cf"}
+{"accountType":"creator","email":"akjmanoj24@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-04-07 10:06:08"}
+{"accountType":"creator","level":"info","message":"User registered successfully","timestamp":"2025-04-07 10:06:08","userId":"67f35638e063ba71df839e5d"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-04-07 10:06:09","userId":"67f35638e063ba71df839e5d"}
+{"accountType":"creator","email":"manojakshara93@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-04-07 12:10:52"}
+{"error":"Username already taken","level":"error","message":"Registration error:","stack":"Error: Username already taken\n    at exports.register (E:\\Travo App\\Project Code\\Travo-App-Project-Final\\backend\\controllers\\authController.js:38:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-04-07 12:10:52"}
+{"accountType":"creator","email":"manojakshara93@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-04-07 12:10:57"}
+{"accountType":"creator","level":"info","message":"User registered successfully","timestamp":"2025-04-07 12:10:57","userId":"67f37379082482f78513e24b"}
+{"accountType":"creator","level":"info","message":"User logged in successfully","timestamp":"2025-04-07 12:10:58","userId":"67f37379082482f78513e24b"}
+{"accountType":"explorer","email":"axra2025@gmail.com","level":"info","message":"Received registration request","timestamp":"2025-04-07 12:16:38"}
+{"accountType":"explorer","level":"info","message":"User registered successfully","timestamp":"2025-04-07 12:16:38","userId":"67f374ce082482f78513e407"}
+{"accountType":"explorer","level":"info","message":"User logged in successfully","timestamp":"2025-04-07 12:16:39","userId":"67f374ce082482f78513e407"}

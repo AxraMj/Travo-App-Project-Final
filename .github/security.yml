@@ -1,0 +1,27 @@
+# Enable Dependabot
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "AxraMj"
+    assignees:
+      - "AxraMj"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "AxraMj"
+    assignees:
+      - "AxraMj"
+
+# Enable Secret Scanning
+secret_scanning:
+  push_protection:
+    status: enabled 
